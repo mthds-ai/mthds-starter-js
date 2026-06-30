@@ -1,0 +1,24 @@
+import { test, expect } from "@playwright/test";
+import { requireLiveApi } from "./liveApi";
+
+// This test hits the live MTHDS API configured by MTHDS_API_URL +
+// MTHDS_API_KEY in `.env.local`, and costs an image-generation call.
+// Image generation is slow, so the timeout is generous. It skips cleanly when
+// no key is set (see e2e/liveApi.ts).
+requireLiveApi();
+
+test("generates an image from a prompt", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto("/");
+  await page.getByRole("tab", { name: /image generation/i }).click();
+
+  await page.getByLabel("Image prompt").fill("A simple red circle on a plain white background.");
+  await page.getByRole("button", { name: /generate image/i }).click();
+
+  const result = page.getByRole("region", { name: "Generated image" });
+  await expect(result).toBeVisible({ timeout: 150_000 });
+
+  const image = result.getByRole("img");
+  await expect(image).toBeVisible();
+  await expect(image).toHaveAttribute("src", /\S/);
+});
