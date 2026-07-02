@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- breaking: renamed the `MTHDS_API_URL` environment variable to `MTHDS_BASE_URL`, following the coordinated wire-key rename in the `mthds` SDK. There is no read alias for the old name — update your `.env.local` accordingly.
+
 ## [v0.1.0] - 2026-06-30
 
 ### Added

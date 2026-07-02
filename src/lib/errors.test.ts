@@ -31,7 +31,7 @@ describe("classifyPipelineError — ApiUnreachableError", () => {
     const result = classifyPipelineError(err, CLOUD_ENV);
     expect(result.kind).toBe("api_unreachable");
     expect(result.message).toContain("https://api.pipelex.com");
-    expect(result.hint?.summary).toMatch(/MTHDS_API_URL/);
+    expect(result.hint?.summary).toMatch(/MTHDS_BASE_URL/);
     expect(result.hint?.code).toContain("https://api.pipelex.com");
   });
 

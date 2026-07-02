@@ -19,15 +19,15 @@ It ships three demo pipelines, presented as tabs:
 ## Prerequisites
 
 - Node.js 22+
-- A running **MTHDS API** for `MTHDS_API_URL` to point at. The `mthds` SDK speaks the [MTHDS protocol](https://mthds.ai), so any MTHDS-compliant runner works:
-  - **Local (default)** — the open-source [`pipelex-api`](https://github.com/Pipelex/pipelex-api) runner serves the MTHDS protocol. Run it on your machine and point `MTHDS_API_URL` at it; the shipped `.env.example` defaults to `http://127.0.0.1:8081`.
+- A running **MTHDS API** for `MTHDS_BASE_URL` to point at. The `mthds` SDK speaks the [MTHDS protocol](https://mthds.ai), so any MTHDS-compliant runner works:
+  - **Local (default)** — the open-source [`pipelex-api`](https://github.com/Pipelex/pipelex-api) runner serves the MTHDS protocol. Run it on your machine and point `MTHDS_BASE_URL` at it; the shipped `.env.example` defaults to `http://127.0.0.1:8081`.
   - **Hosted & beyond** — MTHDS is the open protocol; [Pipelex](https://pipelex.com) is the runtime that powers `pipelex-api` and also offers a managed **Pipelex Hosted API**, the **Pipelex AI Gateway**, and durable workflow orchestration on top of the same protocol. See the [Pipelex docs](https://docs.pipelex.com/) for the wider feature set.
 
 ## Quick start
 
 ```bash
 cp .env.example .env.local
-# .env.local points MTHDS_API_URL at a local runner (http://127.0.0.1:8081);
+# .env.local points MTHDS_BASE_URL at a local runner (http://127.0.0.1:8081);
 # set MTHDS_API_KEY if your MTHDS API requires one
 make install
 make dev
@@ -124,10 +124,10 @@ Aliases: `make ul` / `make un`. **Re-run `make use-local` after every SDK edit**
 
 ## Environment variables
 
-| Variable        | Purpose                                                                                                                | Default                 |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `MTHDS_API_URL` | MTHDS API base URL — a local [`pipelex-api`](https://github.com/Pipelex/pipelex-api) runner or any MTHDS-compliant API | `http://127.0.0.1:8081` |
-| `MTHDS_API_KEY` | Bearer token used by the SDK                                                                                           | (required at runtime)   |
+| Variable         | Purpose                                                                                                                | Default                 |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `MTHDS_BASE_URL` | MTHDS API base URL — a local [`pipelex-api`](https://github.com/Pipelex/pipelex-api) runner or any MTHDS-compliant API | `http://127.0.0.1:8081` |
+| `MTHDS_API_KEY`  | Bearer token used by the SDK                                                                                           | (required at runtime)   |
 
 ## License
 

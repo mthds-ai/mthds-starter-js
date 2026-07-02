@@ -44,7 +44,7 @@ export async function runHelloPipeline(text: string): Promise<RunHelloPipelineRe
     return {
       ok: false,
       error: classifyPipelineError(err, {
-        apiUrl: process.env.MTHDS_API_URL,
+        apiUrl: process.env.MTHDS_BASE_URL,
         hasApiKey: Boolean(process.env.MTHDS_API_KEY),
       }),
     };

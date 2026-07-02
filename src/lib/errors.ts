@@ -85,8 +85,8 @@ function classifyUnreachable(err: ApiUnreachableError, env: ClassifyEnv): Pipeli
     title: "MTHDS API not reachable",
     message: `Tried to reach ${url}${codeSuffix}, but the request did not get a response. Check the URL and your network connection.`,
     hint: {
-      summary: "Verify MTHDS_API_URL in .env.local points to a reachable API.",
-      code: `MTHDS_API_URL=${url}`,
+      summary: "Verify MTHDS_BASE_URL in .env.local points to a reachable API.",
+      code: `MTHDS_BASE_URL=${url}`,
       codeLanguage: "env",
     },
     details: baseDetails,
@@ -201,7 +201,7 @@ function classifyClientAuth(err: ClientAuthenticationError, env: ClassifyEnv): P
     kind: "config_missing",
     title: "MTHDS API URL not configured",
     message:
-      "The mthds SDK needs MTHDS_API_URL to know where to send pipeline requests, but it isn't set.",
+      "The mthds SDK needs MTHDS_BASE_URL to know where to send pipeline requests, but it isn't set.",
     hint: {
       summary: "Copy .env.example to .env.local and fill it in:",
       code: "cp .env.example .env.local",
