@@ -173,7 +173,7 @@ function classifyServerError(err: ApiResponseError, details: string): PipelineEr
       };
     case "PipeValidationError":
     case "PipeFactoryError":
-    case "PipelexInterpreterError":
+    case "MthdsParserError":
     case "MthdsDecodeError":
       return {
         kind: "server_error",
