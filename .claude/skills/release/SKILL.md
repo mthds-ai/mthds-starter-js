@@ -13,9 +13,9 @@ description: >
 
 # Releasing mthds-starter-js
 
-The procedure is the workspace release play, [`docs/releasing.md`](../../../../docs/releasing.md) at the workspace root — `../docs/releasing.md` from this repo's own root, which resolves the same from the main checkout and from any worktree. Read it first, then run it with what follows. The repo key is `mthds-starter-js`, and **the base is `main`, because this repo has no `dev` branch**: the play runs with `<base>` read as `main`, the pull request targets `main` as every pull request here does, and the landing has no back-merge to make. The release worktree is `_mthds-starter-js--release`, made with `wt add mthds-starter-js release --branch release/vX.Y.Z`.
+The procedure is the workspace release play, [`docs/releasing.md`](../../../../docs/releasing.md) at the workspace root — `../docs/releasing.md` from this repo's own root, which resolves the same from the main checkout and from any worktree. Read it first, then run it with what follows. The repo key is `mthds-starter-js`, the base is `dev`, and the pull request targets `main` — the ordinary workspace shape, which this repo adopted along with its `dev` branch. The release worktree is `_mthds-starter-js--release`, made with `wt add mthds-starter-js release --branch release/vX.Y.Z`.
 
-The repo declares neither `.worktree.toml` nor `.worktreeinclude`, and needs neither: `wt` resolves the base from `origin/HEAD`, which points at `origin/main`; it provisions with the Makefile's `install` target (`npm install`), which is what puts into the worktree the `node_modules` every gate below runs out of; and it copies `.env`, its default when a repo names no include list.
+The repo declares neither `.worktree.toml` nor `.worktreeinclude`, and needs neither: `wt` resolves the base from `origin/dev`; it provisions with the Makefile's `install` target (`npm install`), which is what puts into the worktree the `node_modules` every gate below runs out of; and it copies `.env`, its default when a repo names no include list.
 
 ## What ships
 
@@ -29,7 +29,7 @@ git -C <main> log origin/main -1 --oneline                       # the merge is 
 git -C <main> show origin/main:package.json | grep '"version"'   # and carries X.Y.Z
 ```
 
-That merge SHA is the evidence the release item closes on.
+That merge SHA is the evidence the release item closes on. The back-merge is the play's ordinary one: `/ledger-land` merges `origin/main` into `dev` after the release, and the changelog is the one conflict it expects.
 
 ## Version files and the lock
 
@@ -53,14 +53,14 @@ Run in the worktree, in this order, before the commit:
 - **`lint-check.yml`** — `npm ci`, then `make check`, on Node 22.
 - **`tests-check.yml`** — `npm ci`, then `make agent-test`, then `make build`, on Node 22.
 
-Both are declared `on: pull_request:` with `branches: [main, "release/v[0-9]+.[0-9]+.[0-9]+"]`, and that filter reads the **base** branch: the release pull request matches on `main`, and the second pattern is what would catch a pull request whose base is a release branch.
+Both are declared `on: pull_request:` with no `branches:` filter at all, so they fire on every pull request whatever its base — the release pull request into `main`, an ordinary one into `dev`, and any future base alike. That is deliberate and matches the sibling starter `pipelex-starter-js`: a base-branch allow-list is what silently leaves a newly added base ungated, which is exactly what happened here while the repo had only `main`.
 
 **Nothing else gates it, and no gate derives the version from the branch name.** This repo has no version check, no changelog check and no branch guard, so CI never asserts that `package.json` equals the version in `release/vX.Y.Z`, that `CHANGELOG.md` carries the entry, that no `[Unreleased]` heading survived, or that the lock agrees with `package.json`. Those are this skill's job and a miss ships unnoticed. For the same reason a pre-release form would pass rather than fail: ship a plain `X.Y.Z`.
 
 ## Particulars
 
 - **The changelog headings carry the `v`.** `CHANGELOG.md` uses `## [vX.Y.Z] - YYYY-MM-DD`, which is the play's default shape.
-- **Nothing here creates a tag**, since there is no publish or release workflow, so `git describe --tags` finds nothing. The play's pre-flight reading of what the release promotes comes from recent history on `main` rather than from a tag range.
+- **Nothing here creates a tag**, since there is no publish or release workflow, so `git describe --tags` finds nothing. The play's pre-flight reading of what the release promotes is the `git log origin/main..dev` range, as in any repo whose base is `dev`, rather than a tag range.
 - **No standing release follow-ups.** `ledger/ledger.toml` declares `release_followups` for `pipelex` alone, so filing this repo's release item materializes none — whatever this release arms is filed by hand alongside it.
 - **`make use-local` cannot leak into the release, but it can skew the gates.** It installs the sibling `../mthds-js` as a packed tarball with `--no-save`, so neither `package.json` nor `package-lock.json` records it, while `node_modules/mthds` becomes the local build — gates run after it are measuring the sibling SDK rather than the published one. A release worktree provisioned by `make install` holds the npm-published `mthds`, which is what the release should be gated against, and `make use-npm` restores it wherever it was swapped out.
 - **This repo is the starter others copy, and `/bootstrap` rewrites this file.** `.claude/skills/bootstrap/scripts/bootstrap.mjs` names `.claude/skills/release/SKILL.md` among its targets: it substitutes the template's name and title and softens the template's prose self-references, while resetting `package.json` to its initial version and restarting `CHANGELOG.md`. A fork therefore inherits this skill under its own name, and inherits the link to the play above, which resolves only inside the Pipelex workspace — what travels usefully into a fork is the specifics on this page, not that pointer.
