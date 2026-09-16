@@ -19,7 +19,7 @@ The repo declares neither `.worktree.toml` nor `.worktreeinclude`, and needs nei
 
 ## What ships
 
-Nothing is published, and that is the whole of it. `package.json` carries `"private": true`, and `.github/workflows/` holds `lint-check.yml` and `tests-check.yml` and nothing else — there is no publish workflow, so no npm package, no image, no docs site, no GitHub Release, and nothing that creates a tag. The merge to `main` promotes the code and stops there.
+**Nothing is published.** That is the whole of it: `package.json` carries `"private": true`, and `.github/workflows/` holds `lint-check.yml` and `tests-check.yml` and nothing else — there is no publish workflow, so no npm package, no image, no docs site, no GitHub Release, and nothing that creates a tag. The merge to `main` promotes the code and stops there.
 
 The landing therefore has no workflow run, no registry answer and no tag to read. What it verifies is the merge itself, from `<main>`:
 
