@@ -13,7 +13,7 @@ description: >
 
 # Releasing mthds-starter-js
 
-The procedure is the workspace release play, [`docs/releasing.md`](../../../../docs/releasing.md) at the workspace root — `../docs/releasing.md` from this repo's own root, which resolves the same from the main checkout and from any worktree. Read it first, then run it with what follows. The repo key is `mthds-starter-js`, the base is `dev`, and the pull request targets `main` — the ordinary workspace shape, which this repo adopted along with its `dev` branch. The release worktree is `_mthds-starter-js--release`, made with `wt add mthds-starter-js release --branch release/vX.Y.Z`.
+The procedure is the workspace release play, [`docs/workspace/releasing.md`](../../../../docs/workspace/releasing.md) at the workspace root — `../docs/workspace/releasing.md` from this repo's own root, which resolves the same from the main checkout and from any worktree. Read it first, then run it with what follows. The repo key is `mthds-starter-js`, the base is `dev`, and the pull request targets `main` — the ordinary workspace shape, which this repo adopted along with its `dev` branch. The release worktree is `_mthds-starter-js--release`, made with `wt add mthds-starter-js release --branch release/vX.Y.Z`.
 
 The repo declares neither `.worktree.toml` nor `.worktreeinclude`, and needs neither: `wt` resolves the base from `origin/dev`; it provisions with the Makefile's `install` target (`npm install`), which is what puts into the worktree the `node_modules` every gate below runs out of; and it copies `.env`, its default when a repo names no include list.
 
