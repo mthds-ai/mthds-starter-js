@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **The `mthds` SDK range moves from `^0.14.0` to `^0.27.0`**: the starter now runs its examples on the current `mthds` release. The `MthdsApiClient` calls and the `mthds/errors` classes the starter uses are unchanged across that span, and the one breaking change in 0.27, in the `mthds-agent share` command, does not touch the SDK.
+
 ## [v0.1.0] - 2026-06-30
 
 ### Added
