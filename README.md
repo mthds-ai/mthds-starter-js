@@ -2,8 +2,6 @@
 
 A minimal Next.js starter for TypeScript developers who want to run [MTHDS](https://mthds.ai) methods from a web app, through the [`mthds`](https://www.npmjs.com/package/mthds) SDK.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
 ## What this repository is
 
 [MTHDS](https://mthds.ai) is an open standard for AI methods, and a method runs on any MTHDS-compliant runtime. This repository is a Next.js app that runs methods from its Server Actions: each action reads a `.mthds` bundle from disk, sends it with your inputs to an MTHDS API through the `mthds` SDK, and turns the output into a typed value the page renders.
