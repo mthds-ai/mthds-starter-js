@@ -1,6 +1,6 @@
 {
   "name": "mthds-starter-js",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Minimal Next.js starter that calls an MTHDS API via the mthds SDK to run AI methods.",
   "scripts": {

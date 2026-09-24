@@ -1,11 +1,13 @@
 # Changelog
 
-## [Unreleased]
+## [v0.1.1] - 2026-09-24
 
 ### Changed
 
 - **Qualified pipe references in the Server Actions**: each action passes `pipe_code` as `<domain>.<pipe_code>` (`hello.extract_entities`, `summarize_pdf.summarize_pdf`, `generate_image.generate_image`) instead of the bare code, so the call names exactly one pipe and stays valid when another loaded domain declares the same code; copy that form into the actions you add.
 - **README and `docs/`**: the README says what the app is, what it needs and how to start in the words of the MTHDS standard, naming any MTHDS-compliant API and Pipelex as one of them; the make targets, the optional end-to-end tests and local SDK development moved to `docs/development.md`, the file-input path to `docs/file-and-image-inputs.md`, and `/bootstrap` now removes the README's pointer to itself.
+- **CI on every pull request**: `lint-check` and `tests-check` run on `pull_request` with no base-branch filter, so a pull request into `dev`, `main` or any branch you add later is gated without editing the workflows.
+- **`/release` skill**: it declares only this repo's specifics (what ships, the version file and the lock, the gates, the release commit and the CI on the release pull request) and leaves the procedure to the Pipelex workspace's release play, which it links to.
 
 ### Security
 
