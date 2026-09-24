@@ -35,7 +35,7 @@ describe("runHelloPipeline", () => {
     const result = await runHelloPipeline("  hello world  ");
 
     expect(execute).toHaveBeenCalledWith({
-      pipe_code: "extract_entities",
+      pipe_code: "hello.extract_entities",
       mthds_contents: ["DUMMY_BUNDLE_TOML"],
       inputs: { text: "hello world" },
     });

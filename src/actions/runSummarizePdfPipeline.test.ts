@@ -46,7 +46,7 @@ describe("runSummarizePdfPipeline", () => {
     });
 
     expect(execute).toHaveBeenCalledWith({
-      pipe_code: "summarize_pdf",
+      pipe_code: "summarize_pdf.summarize_pdf",
       mthds_contents: ["DUMMY_BUNDLE_TOML"],
       inputs: {
         document: {
