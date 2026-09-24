@@ -50,15 +50,19 @@ e2e/
   extract.spec.ts             # Playwright e2e (hits live API)
   summarize-pdf.spec.ts
   generate-image.spec.ts
+docs/
+  file-and-image-inputs.md    # the file-input and image-output path, for human readers
+  development.md              # make targets, optional e2e, local SDK development
 ```
 
 ### What lives where
 
-- **`methods/`** — `.mthds` bundles (TOML). Treat them as first-class artifacts, not embedded strings. Use the `/mthds-build`, `/mthds-edit`, `/mthds-check`, `/mthds-run` skills from the `mthds-plugins` marketplace to author and validate them.
+- **`methods/`** — `.mthds` bundles (TOML). Treat them as first-class artifacts, not embedded strings. Author and change them with the [Pipelex plugin](https://github.com/Pipelex/pipelex-plugins)'s skills (`/pipelex-design` to build one, `/pipelex-edit` to change one), whose hook validates every `.mthds` edit.
 - **`src/actions/`** — Server Actions (`"use server"`). The only place that calls the MTHDS SDK. Keep them thin: load bundle → call SDK → narrow output → return.
 - **`src/lib/`** — Server-side utilities. No React. Two deliberate client-touching exceptions: `errors.ts` (its types cross the server→client boundary, and `classifyTransportError` runs client-side), and `clientFile.ts` (a browser `FileReader` wrapper imported only by client components). `fileEncoding.ts` is pure (no React, no `process.env`) so it is safe to import from either side. Because `errors.ts` is bundled into the client, it imports the SDK error classes from the **`mthds/errors`** subpath, never the top-level `mthds` barrel — the barrel pulls `MthdsApiClient` → `node:fs` into the graph, which a client bundler cannot externalize and which breaks `make build`. Only `mthdsClient.ts` (server-only) imports `MthdsApiClient` from `mthds`.
 - **`src/components/`** — React components. `"use client"` only when the component uses hooks, event handlers, or browser APIs.
 - **`src/types/`** — TS types and runtime narrowers (`parseXxx()`). Narrowers throw on shape mismatch; that's deliberate (system boundary).
+- **`docs/`** — reference for human readers, linked from the README, which stays the front page. A change to what a page describes updates that page in the same change.
 
 ## MTHDS Integration Pattern
 
@@ -80,7 +84,7 @@ export async function runHelloPipeline(text: string): Promise<RunHelloPipelineRe
   try {
     const bundle = await loadHelloBundle();
     const response = await getMthdsClient().execute({
-      pipe_code: "extract_entities",
+      pipe_code: "hello.extract_entities",
       mthds_contents: [bundle],
       inputs: { text: text.trim() },
     });
@@ -101,6 +105,7 @@ Conventions:
 
 - **Bundle source**: ship `.mthds` files in the repo at `methods/<name>/main.mthds` and read them at request time with `fs.readFile`. Do **not** inline bundle TOML as a string in `.ts` — bundles are first-class.
 - **One client**: instantiate `MthdsApiClient` once via `getMthdsClient()`. Never `new MthdsApiClient()` directly in actions or components.
+- **Qualified pipe reference**: pass `pipe_code` as `<domain>.<pipe_code>` — the `domain` declared at the top of the bundle, then the pipe's code (`hello.extract_entities`). The qualified form is an exact key. A bare code only works while one domain declares it: the reference runtime, Pipelex, searches every domain for a bare code and answers `422` once two of them declare it.
 - **Narrow at the boundary**: the SDK returns loosely-typed `pipe_output`. Always pass it through a `parseXxx()` narrower in `src/types/` that throws a tagged subclass of `Error` (e.g. `BadPipelineOutputError`) on shape mismatch. Do not `as` your way through.
 - **Return classified errors, don't throw across the server→client boundary**: server actions return `{ ok: true, ... } | { ok: false, error: PipelineError }`. Throwing works in dev but Next.js production builds strip server-action error messages to opaque digests, which destroys the developer-facing error UX. Wrap the SDK call in `try/catch`, hand the caught value to `classifyPipelineError(err, env)`, and return the structured error. Render it client-side with `<ErrorDisplay>`.
 - **Add new error kinds in `src/lib/errors.ts`**: extend `PipelineErrorKind`, add a branch in `classifyPipelineError`, and cover it in `src/lib/errors.test.ts` (table-driven). Keep `classifyPipelineError` pure — env passed in by caller, no `process.env` reads inside. Client-side rejections of awaited Server Actions go through `classifyTransportError` instead — the SDK error classes don't survive the server→client boundary, so they would never `instanceof`-match on the client. Pre-flight validation kinds (`file_too_large`, `unsupported_file_type`) are the exception: they are built inline by a Server Action _before_ the SDK call (there is no thrown error to classify), so they have no `classifyPipelineError` branch.
@@ -118,10 +123,10 @@ Text inputs are plain strings. File inputs (PDFs, images) take one extra step, d
 
 To add a new pipeline:
 
-1. Create `methods/<name>/main.mthds` (use `/mthds-build`).
+1. Create `methods/<name>/main.mthds` (use `/pipelex-design`).
 2. Add `loadXxxBundle()` in `src/lib/loadBundle.ts` (or one helper per bundle).
 3. Add the type + narrower (with a tagged error subclass) in `src/types/<name>.ts`.
-4. Add a Server Action in `src/actions/run<Name>Pipeline.ts` that returns a `Run<Name>PipelineResult` union and uses `classifyPipelineError` in the catch.
+4. Add a Server Action in `src/actions/run<Name>Pipeline.ts` that names the pipe as `<domain>.<pipe_code>`, returns a `Run<Name>PipelineResult` union and uses `classifyPipelineError` in the catch.
 5. Wire it from a component, render `<ErrorDisplay error={result.error} />` when `!result.ok`, and wrap the awaited action call in `try/catch` so transport-level rejections route through `classifyTransportError`. See `src/components/EntityForm.tsx` for the canonical pattern.
 
 ## Component Conventions
@@ -222,3 +227,14 @@ Other targets that matter:
 - **Renaming App Router directories**: delete `.next/` before running `make check` — stale type references in `.next/types/` will fail typecheck.
 - **`next-env.d.ts` is generated** (gitignored). Next regenerates it on dev/build. Don't edit by hand.
 - **Tailwind `content` globs** are scoped to `src/app/` and `src/components/`. If you add a new top-level dir with classes, extend `tailwind.config.ts`.
+- **`next dev` manages the `BEGIN:nextjs-agent-rules` block at the bottom of this file.** When it detects an AI coding agent driving it (`node_modules/next/dist/server/lib/generate-agent-files.js`), it writes the block into `AGENTS.md` if one exists and into this file otherwise, and re-adds it on the next dev run if it is deleted, so the block is committed rather than removed each time. Treat it as generated: keep hand-written guidance above it and do not reword it. Next finds the block by searching for its opening marker, so **never write that marker verbatim in prose** (this bullet names it without its comment delimiters for that reason), or the next upsert will swallow everything between your sentence and the real block.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

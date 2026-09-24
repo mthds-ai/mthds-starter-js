@@ -108,6 +108,7 @@ describe("bootstrap.mjs anchors", () => {
     expect(readme).not.toContain(TEMPLATE_NAME);
     expect(readme).not.toContain(TEMPLATE_TITLE);
     expect(readme).toContain("Extracts invoices.");
+    expect(readme).not.toContain("/bootstrap");
 
     const claude = read(root, "CLAUDE.md");
     expect(claude).not.toContain(TEMPLATE_NAME);

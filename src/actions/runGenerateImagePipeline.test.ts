@@ -38,7 +38,7 @@ describe("runGenerateImagePipeline", () => {
     const result = await runGenerateImagePipeline("  a red bicycle  ");
 
     expect(execute).toHaveBeenCalledWith({
-      pipe_code: "generate_image",
+      pipe_code: "generate_image.generate_image",
       mthds_contents: ["DUMMY_BUNDLE_TOML"],
       inputs: { image_prompt: "a red bicycle" },
     });
