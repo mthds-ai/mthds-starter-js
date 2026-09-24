@@ -50,15 +50,19 @@ e2e/
   extract.spec.ts             # Playwright e2e (hits live API)
   summarize-pdf.spec.ts
   generate-image.spec.ts
+docs/
+  file-and-image-inputs.md    # the file-input and image-output path, for human readers
+  development.md              # make targets, optional e2e, local SDK development
 ```
 
 ### What lives where
 
-- **`methods/`** — `.mthds` bundles (TOML). Treat them as first-class artifacts, not embedded strings. Use the `/mthds-build`, `/mthds-edit`, `/mthds-check`, `/mthds-run` skills from the `mthds-plugins` marketplace to author and validate them.
+- **`methods/`** — `.mthds` bundles (TOML). Treat them as first-class artifacts, not embedded strings. Author and change them with the [Pipelex plugin](https://github.com/Pipelex/pipelex-plugins)'s skills (`/pipelex-design` to build one, `/pipelex-edit` to change one), whose hook validates every `.mthds` edit.
 - **`src/actions/`** — Server Actions (`"use server"`). The only place that calls the MTHDS SDK. Keep them thin: load bundle → call SDK → narrow output → return.
 - **`src/lib/`** — Server-side utilities. No React. Two deliberate client-touching exceptions: `errors.ts` (its types cross the server→client boundary, and `classifyTransportError` runs client-side), and `clientFile.ts` (a browser `FileReader` wrapper imported only by client components). `fileEncoding.ts` is pure (no React, no `process.env`) so it is safe to import from either side. Because `errors.ts` is bundled into the client, it imports the SDK error classes from the **`mthds/errors`** subpath, never the top-level `mthds` barrel — the barrel pulls `MthdsApiClient` → `node:fs` into the graph, which a client bundler cannot externalize and which breaks `make build`. Only `mthdsClient.ts` (server-only) imports `MthdsApiClient` from `mthds`.
 - **`src/components/`** — React components. `"use client"` only when the component uses hooks, event handlers, or browser APIs.
 - **`src/types/`** — TS types and runtime narrowers (`parseXxx()`). Narrowers throw on shape mismatch; that's deliberate (system boundary).
+- **`docs/`** — reference for human readers, linked from the README, which stays the front page. A change to what a page describes updates that page in the same change.
 
 ## MTHDS Integration Pattern
 
@@ -119,7 +123,7 @@ Text inputs are plain strings. File inputs (PDFs, images) take one extra step, d
 
 To add a new pipeline:
 
-1. Create `methods/<name>/main.mthds` (use `/mthds-build`).
+1. Create `methods/<name>/main.mthds` (use `/pipelex-design`).
 2. Add `loadXxxBundle()` in `src/lib/loadBundle.ts` (or one helper per bundle).
 3. Add the type + narrower (with a tagged error subclass) in `src/types/<name>.ts`.
 4. Add a Server Action in `src/actions/run<Name>Pipeline.ts` that names the pipe as `<domain>.<pipe_code>`, returns a `Run<Name>PipelineResult` union and uses `classifyPipelineError` in the catch.
