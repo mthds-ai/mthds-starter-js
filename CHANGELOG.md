@@ -7,6 +7,10 @@
 - **Qualified pipe references in the Server Actions**: each action passes `pipe_code` as `<domain>.<pipe_code>` (`hello.extract_entities`, `summarize_pdf.summarize_pdf`, `generate_image.generate_image`) instead of the bare code, so the call names exactly one pipe and stays valid when another loaded domain declares the same code; copy that form into the actions you add.
 - **README and `docs/`**: the README says what the app is, what it needs and how to start in the words of the MTHDS standard, naming any MTHDS-compliant API and Pipelex as one of them; the make targets, the optional end-to-end tests and local SDK development moved to `docs/development.md`, the file-input path to `docs/file-and-image-inputs.md`, and `/bootstrap` now removes the README's pointer to itself.
 
+### Security
+
+- **Next.js 16.3.6**: `next` and `eslint-config-next` move from 16.2 to `^16.3.6`, out of the range of two critical remote-code-execution advisories (GHSA-p293-qw3h-jr36 on Windows-hosted servers, GHSA-2xp9-vwfh-vxw4 in the Image Optimization API with AVIF) and several lesser Next.js advisories, and the lockfile picks up the in-range fixes for `sharp`, `postcss`, `axios` and the other transitive packages `npm audit` flagged.
+
 ## [v0.1.0] - 2026-06-30
 
 ### Added
