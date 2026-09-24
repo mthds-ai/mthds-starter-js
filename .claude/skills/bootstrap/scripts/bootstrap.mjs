@@ -39,16 +39,20 @@ export const TEMPLATE_TITLE = "MTHDS Starter"; // human-facing display name (pag
 // Fresh projects restart here — package.json and CHANGELOG.md must agree.
 export const RESET_VERSION = "0.1.0";
 
-// The two long-form description placeholders. README and CLAUDE.md carry the
-// same sentence modulo the leading article, so anchor each exactly.
+// The two long-form description placeholders: the README's one line under its
+// title, and CLAUDE.md's opening line. Anchor each exactly.
 const README_DESCRIPTION =
-  "A minimal Next.js 16 starter that calls an [MTHDS](https://mthds.ai) API via the [`mthds`](https://www.npmjs.com/package/mthds) SDK to run AI methods (`.mthds` bundles) from a TypeScript app.";
+  "A minimal Next.js starter for TypeScript developers who want to run [MTHDS](https://mthds.ai) methods from a web app, through the [`mthds`](https://www.npmjs.com/package/mthds) SDK.";
 const CLAUDE_DESCRIPTION =
   "Minimal Next.js 16 starter that calls an [MTHDS](https://mthds.ai) API via the [`mthds`](https://www.npmjs.com/package/mthds) SDK to run AI methods (`.mthds` bundles) from a TypeScript app.";
 const LAYOUT_DESCRIPTION = "Minimal Next.js app calling an MTHDS API via the mthds SDK.";
 
 // CLAUDE.md's template-only charter paragraph, stripped by --clean.
 const CHARTER_MARKER = "This repo is a **reference template**.";
+
+// The README paragraph that tells a reader to run /bootstrap. Always stripped:
+// the skill removes itself once it has run, so the pointer would dangle.
+const README_BOOTSTRAP_MARKER = "To make this project your own, run `/bootstrap`";
 
 // npm package name rules (legacy-strict subset: new packages must be lowercase
 // URL-safe, optionally scoped). Anything else breaks `npm install` later.
@@ -242,6 +246,8 @@ export function transformReadme(text, names, opts) {
     }
   }
 
+  text = stripParagraph(text, README_BOOTSTRAP_MARKER, "README.md: /bootstrap paragraph");
+
   return applyNameTokens(text, names);
 }
 
@@ -252,16 +258,21 @@ export function transformReadme(text, names, opts) {
  * template-maintainer behavior instead of building the user's app.
  */
 export function stripTemplateParagraph(text) {
-  const start = text.indexOf(CHARTER_MARKER);
+  return stripParagraph(text, CHARTER_MARKER, "CLAUDE.md: template charter paragraph");
+}
+
+/** Remove the paragraph that starts at `marker`, up to and including its blank line. */
+function stripParagraph(text, marker, label) {
+  const start = text.indexOf(marker);
   if (start === -1) {
-    warn("CLAUDE.md: template charter paragraph not found (already stripped?); skipped.");
+    warn(`${label} not found (already stripped?); skipped.`);
     return text;
   }
   // Match the paragraph end on LF or CRLF (Windows clones with core.autocrlf
   // check out CRLF working trees, where indexOf("\n\n") would miss).
   const end = /\r?\n\r?\n/.exec(text.slice(start));
   if (!end) {
-    warn("CLAUDE.md: template charter paragraph has no end boundary; left as-is.");
+    warn(`${label} has no end boundary; left as-is.`);
     return text;
   }
   return text.slice(0, start) + text.slice(start + end.index + end[0].length);
