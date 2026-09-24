@@ -35,7 +35,8 @@ export async function runGenerateImagePipeline(
     const bundle = await loadGenerateImageBundle();
     const client = getMthdsClient();
     const response = await client.execute({
-      pipe_code: "generate_image",
+      // `<domain>.<pipe_code>` names exactly one pipe; a bare code is searched across every domain.
+      pipe_code: "generate_image.generate_image",
       mthds_contents: [bundle],
       inputs: { image_prompt: trimmed },
     });

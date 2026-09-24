@@ -55,7 +55,8 @@ export async function runSummarizePdfPipeline(input: {
     const bundle = await loadSummarizePdfBundle();
     const client = getMthdsClient();
     const response = await client.execute({
-      pipe_code: "summarize_pdf",
+      // `<domain>.<pipe_code>` names exactly one pipe; a bare code is searched across every domain.
+      pipe_code: "summarize_pdf.summarize_pdf",
       mthds_contents: [bundle],
       inputs: { document: buildDocumentInput(dataUrl, filename || "document.pdf") },
     });

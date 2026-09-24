@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **Qualified pipe references in the Server Actions**: each action passes `pipe_code` as `<domain>.<pipe_code>` (`hello.extract_entities`, `summarize_pdf.summarize_pdf`, `generate_image.generate_image`) instead of the bare code, so the call names exactly one pipe and stays valid when another loaded domain declares the same code; copy that form into the actions you add.
+
 ## [v0.1.0] - 2026-06-30
 
 ### Added

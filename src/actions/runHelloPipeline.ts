@@ -34,7 +34,8 @@ export async function runHelloPipeline(text: string): Promise<RunHelloPipelineRe
     const bundle = await loadHelloBundle();
     const client = getMthdsClient();
     const response = await client.execute({
-      pipe_code: "extract_entities",
+      // `<domain>.<pipe_code>` names exactly one pipe; a bare code is searched across every domain.
+      pipe_code: "hello.extract_entities",
       mthds_contents: [bundle],
       inputs: { text: trimmed },
     });
