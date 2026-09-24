@@ -227,3 +227,14 @@ Other targets that matter:
 - **Renaming App Router directories**: delete `.next/` before running `make check` — stale type references in `.next/types/` will fail typecheck.
 - **`next-env.d.ts` is generated** (gitignored). Next regenerates it on dev/build. Don't edit by hand.
 - **Tailwind `content` globs** are scoped to `src/app/` and `src/components/`. If you add a new top-level dir with classes, extend `tailwind.config.ts`.
+- **`next dev` manages the `BEGIN:nextjs-agent-rules` block at the bottom of this file.** When it detects an AI coding agent driving it (`node_modules/next/dist/server/lib/generate-agent-files.js`), it writes the block into `AGENTS.md` if one exists and into this file otherwise, and re-adds it on the next dev run if it is deleted, so the block is committed rather than removed each time. Treat it as generated: keep hand-written guidance above it and do not reword it. Next finds the block by searching for its opening marker, so **never write that marker verbatim in prose** (this bullet names it without its comment delimiters for that reason), or the next upsert will swallow everything between your sentence and the real block.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
