@@ -29,7 +29,7 @@ git -C <main> log origin/main -1 --oneline                       # the merge is 
 git -C <main> show origin/main:package.json | grep '"version"'   # and carries X.Y.Z
 ```
 
-That merge is what the landing verifies: `ledger land` reads the merge commit on `origin/main`, checks that `package.json` spells X.Y.Z there and did not in the merge's first parent, and ends with nothing to close, since a release files nothing in the ledger. The back-merge is the play's ordinary one: `/ledger-land` merges `origin/main` into `dev` after the release, and the changelog is the one conflict it expects.
+That merge is what the landing verifies: `ledger land` reads the merge commit on `origin/main`, checks that no workflow in `.github/workflows/` can run on the merge — a `push` that reaches `main`, or a pull request trigger whose `types` include `closed` — and that `package.json` spells X.Y.Z there and did not in the merge's first parent, and ends with nothing to close, since a release files nothing in the ledger. Giving either CI workflow below such a trigger therefore stops every release landing until **What ships** names it. The back-merge is the play's ordinary one: `/ledger-land` merges `origin/main` into `dev` after the release, and the changelog is the one conflict it expects.
 
 ## Version files and the lock
 
