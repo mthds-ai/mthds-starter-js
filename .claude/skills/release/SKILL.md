@@ -29,7 +29,7 @@ git -C <main> log origin/main -1 --oneline                       # the merge is 
 git -C <main> show origin/main:package.json | grep '"version"'   # and carries X.Y.Z
 ```
 
-That merge SHA is the evidence the release item closes on. The back-merge is the play's ordinary one: `/ledger-land` merges `origin/main` into `dev` after the release, and the changelog is the one conflict it expects.
+That merge is what the landing verifies: `ledger land` reads the merge commit on `origin/main`, checks that `package.json` spells X.Y.Z there and did not in the merge's first parent, and ends with nothing to close, since a release files nothing in the ledger. The back-merge is the play's ordinary one: `/ledger-land` merges `origin/main` into `dev` after the release, and the changelog is the one conflict it expects.
 
 ## Version files and the lock
 
@@ -61,6 +61,6 @@ Both are declared `on: pull_request:` with no `branches:` filter at all, so they
 
 - **The changelog headings carry the `v`.** `CHANGELOG.md` uses `## [vX.Y.Z] - YYYY-MM-DD`, which is the play's default shape.
 - **Nothing here creates a tag**, since there is no publish or release workflow, so `git describe --tags` finds nothing. The play's pre-flight reading of what the release promotes is the `git log origin/main..dev` range, as in any repo whose base is `dev`, rather than a tag range.
-- **No standing release follow-ups.** `ledger/ledger.toml` declares `release_followups` for `pipelex` alone, so filing this repo's release item materializes none — whatever this release arms is filed by hand alongside it.
+- **No standing release follow-ups.** `ledger/ledger.toml` declares `release_reminders` for `pipelex` alone, so the landing of this repo's release prints none. And since nothing here cuts a tag, `ledger new --after-release mthds-starter-js@…` refuses this repo: whatever this release arms is filed by hand in the play's step 3, `--blocked-by` the work item whose change it waits on.
 - **`make use-local` cannot leak into the release, but it can skew the gates.** It installs the sibling `../mthds-js` as a packed tarball with `--no-save`, so neither `package.json` nor `package-lock.json` records it, while `node_modules/mthds` becomes the local build — gates run after it are measuring the sibling SDK rather than the published one. A release worktree provisioned by `make install` holds the npm-published `mthds`, which is what the release should be gated against, and `make use-npm` restores it wherever it was swapped out.
 - **This repo is the starter others copy, and `/bootstrap` rewrites this file.** `.claude/skills/bootstrap/scripts/bootstrap.mjs` names `.claude/skills/release/SKILL.md` among its targets: it substitutes the template's name and title and softens the template's prose self-references, while resetting `package.json` to its initial version and restarting `CHANGELOG.md`. A fork therefore inherits this skill under its own name, and inherits the link to the play above, which resolves only inside the Pipelex workspace — what travels usefully into a fork is the specifics on this page, not that pointer.
