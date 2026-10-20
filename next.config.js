@@ -9,6 +9,15 @@ const nextConfig = {
       bodySizeLimit: "12mb",
     },
   },
+  // Each Server Action sends a method's whole directory, which `loadMethodTree`
+  // (src/lib/methodTree.ts) hands to the `mthds` SDK to list at request time.
+  // Name `methods/` here so every traced deployment (Vercel, or
+  // `output: "standalone"`) ships it, rather than relying on the bundler
+  // guessing it from a path built at runtime. The `/*` key covers every route,
+  // since a Server Action runs on whichever page imports it.
+  outputFileTracingIncludes: {
+    "/*": ["./methods/**/*"],
+  },
   async headers() {
     return [
       {

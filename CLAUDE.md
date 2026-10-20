@@ -209,7 +209,7 @@ Other targets that matter:
 
 ## Git Workflow
 
-- **PR target branch**: `main`.
+- **PR target branch**: `dev`. Only a `release/` branch targets `main`.
 
 ## Anti-patterns to Avoid
 

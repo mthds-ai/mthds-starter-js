@@ -14,6 +14,10 @@ The starter sends each method as its tree:
 
 The directory is listed at request time, so an edited method runs on the next request without restarting the dev server.
 
+## The methods directory ships with the app
+
+Because the server lists `methods/` when a run starts, the directory has to be on the server's disk wherever the app is deployed, not only in the repository. `next.config.js` names it in `outputFileTracingIncludes`, so every build traces it into the server's output: a Vercel deployment and an `output: "standalone"` build both carry `methods/` and every file in it. A method you add under `methods/` ships the same way, with nothing to configure. If you move the methods elsewhere, change that include to match.
+
 ## Which files travel
 
 The SDK applies the standard's membership rule, so not every file of the directory is sent. These stay behind:
