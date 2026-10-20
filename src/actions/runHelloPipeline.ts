@@ -1,7 +1,7 @@
 "use server";
 
 import { getMthdsClient } from "@/lib/mthdsClient";
-import { loadHelloBundle } from "@/lib/loadBundle";
+import { loadMethodTree } from "@/lib/methodTree";
 import { parseEntities, type ExtractedEntities } from "@/types/helloPipeline";
 import { classifyPipelineError, type PipelineError } from "@/lib/errors";
 
@@ -31,12 +31,13 @@ export async function runHelloPipeline(text: string): Promise<RunHelloPipelineRe
   }
 
   try {
-    const bundle = await loadHelloBundle();
+    const tree = await loadMethodTree("hello");
     const client = getMthdsClient();
     const response = await client.execute({
       // `<domain>.<pipe_code>` names exactly one pipe; a bare code is searched across every domain.
       pipe_code: "hello.extract_entities",
-      mthds_contents: [bundle],
+      // The method's whole directory, which the SDK sends inline or by content hash.
+      tree,
       inputs: { text: trimmed },
     });
     const entities = parseEntities(response.pipe_output);
@@ -45,7 +46,7 @@ export async function runHelloPipeline(text: string): Promise<RunHelloPipelineRe
     return {
       ok: false,
       error: classifyPipelineError(err, {
-        apiUrl: process.env.MTHDS_API_URL,
+        apiUrl: process.env.MTHDS_BASE_URL,
         hasApiKey: Boolean(process.env.MTHDS_API_KEY),
       }),
     };

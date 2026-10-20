@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **`docs/methods.md`**: how a method's directory reaches the MTHDS API as its tree, which files travel with it, inline or by content hash, and how to add a method.
+
+### Changed
+
+- **Each example runs its method directory as its tree (Breaking)**: the Server Actions list `methods/<name>/` with `loadMethodTree` (`src/lib/methodTree.ts`, replacing `src/lib/loadBundle.ts` and its per-method loaders) and pass it to `execute` as `tree`, so a template, an image or any other file a step reads travels with the bundle; the SDK sends the tree inline when it is small and by content hash otherwise, uploading only the files the API lacks. `mthds_contents` is gone, so the app needs an MTHDS API that takes a run's method as the protocol's `files` map.
+- **`mthds` 0.33 (Breaking)**: the SDK moves from `^0.14.0` to `^0.33.0`, which reads the API's address from `MTHDS_BASE_URL` in place of `MTHDS_API_URL`, so rename the variable in your `.env.local`; a value with a path, such as `.../v1`, is now refused before anything is sent.
+- **Errors read from the problem document (Breaking)**: `classifyPipelineError` reads each SDK failure by the MTHDS protocol's problem `code` and `domain` and shows the API's own title, sentence, next step and faults, each with the file and line it is in. The kinds `bundle_load_failed` and `config_missing` become `method_load_failed` (a method directory that cannot be listed as a tree, `MethodLoadError`) and `config_invalid` (a base URL or an API key the SDK refuses), and `method_invalid`, `account_limited`, `run_outcome_unknown` (a run whose request left without an answer, which may exist) and `upload_failed` join them.
+
+### Fixed
+
+- **The local API hint**: when the local MTHDS API cannot be reached, the error names a runnable `docker run` of Pipelex's `pipelex/pipelex-api` image and its documentation, where it pointed at a sibling checkout of the archived `pipelex-api` repository.
+
 ## [v0.1.1] - 2026-09-24
 
 ### Changed

@@ -1,7 +1,7 @@
 "use server";
 
 import { getMthdsClient } from "@/lib/mthdsClient";
-import { loadSummarizePdfBundle } from "@/lib/loadBundle";
+import { loadMethodTree } from "@/lib/methodTree";
 import {
   MAX_PDF_BYTES,
   buildDocumentInput,
@@ -52,12 +52,13 @@ export async function runSummarizePdfPipeline(input: {
   }
 
   try {
-    const bundle = await loadSummarizePdfBundle();
+    const tree = await loadMethodTree("summarize-pdf");
     const client = getMthdsClient();
     const response = await client.execute({
       // `<domain>.<pipe_code>` names exactly one pipe; a bare code is searched across every domain.
       pipe_code: "summarize_pdf.summarize_pdf",
-      mthds_contents: [bundle],
+      // The method's whole directory, which the SDK sends inline or by content hash.
+      tree,
       inputs: { document: buildDocumentInput(dataUrl, filename || "document.pdf") },
     });
     const summary = parseDocumentSummary(response.pipe_output);
@@ -66,7 +67,7 @@ export async function runSummarizePdfPipeline(input: {
     return {
       ok: false,
       error: classifyPipelineError(err, {
-        apiUrl: process.env.MTHDS_API_URL,
+        apiUrl: process.env.MTHDS_BASE_URL,
         hasApiKey: Boolean(process.env.MTHDS_API_KEY),
       }),
     };

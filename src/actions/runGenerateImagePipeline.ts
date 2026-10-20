@@ -1,7 +1,7 @@
 "use server";
 
 import { getMthdsClient } from "@/lib/mthdsClient";
-import { loadGenerateImageBundle } from "@/lib/loadBundle";
+import { loadMethodTree } from "@/lib/methodTree";
 import { parseGeneratedImage, type GeneratedImage } from "@/types/generateImagePipeline";
 import { classifyPipelineError, type PipelineError } from "@/lib/errors";
 
@@ -32,12 +32,13 @@ export async function runGenerateImagePipeline(
   }
 
   try {
-    const bundle = await loadGenerateImageBundle();
+    const tree = await loadMethodTree("generate-image");
     const client = getMthdsClient();
     const response = await client.execute({
       // `<domain>.<pipe_code>` names exactly one pipe; a bare code is searched across every domain.
       pipe_code: "generate_image.generate_image",
-      mthds_contents: [bundle],
+      // The method's whole directory, which the SDK sends inline or by content hash.
+      tree,
       inputs: { image_prompt: trimmed },
     });
     const image = parseGeneratedImage(response.pipe_output);
@@ -46,7 +47,7 @@ export async function runGenerateImagePipeline(
     return {
       ok: false,
       error: classifyPipelineError(err, {
-        apiUrl: process.env.MTHDS_API_URL,
+        apiUrl: process.env.MTHDS_BASE_URL,
         hasApiKey: Boolean(process.env.MTHDS_API_KEY),
       }),
     };
