@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ApiUnreachableError } from "mthds/errors";
+import { ApiTransportError, problemError } from "mthds/errors";
+import { MethodLoadError } from "@/types/pipelineError";
 
-const execute = vi.fn();
-
-vi.mock("@/lib/loadBundle", () => ({
-  loadSummarizePdfBundle: vi.fn().mockResolvedValue("DUMMY_BUNDLE_TOML"),
+const { execute, loadMethodTree } = vi.hoisted(() => ({
+  execute: vi.fn(),
+  loadMethodTree: vi.fn(),
 }));
+
+vi.mock("@/lib/methodTree", () => ({ loadMethodTree }));
 
 vi.mock("@/lib/mthdsClient", () => ({
   getMthdsClient: () => ({ execute }),
@@ -32,12 +34,25 @@ function summaryOutput() {
   };
 }
 
+// A stand-in for the listed tree: the action hands it to the SDK untouched.
+const METHOD_TREE = { files: [], digest: "sha256:tree", readFile: vi.fn() };
+
 beforeEach(() => {
   execute.mockReset();
+  loadMethodTree.mockReset();
+  loadMethodTree.mockResolvedValue(METHOD_TREE);
 });
 
+function unreachable(): ApiTransportError {
+  const { problem } = problemError("client.unreachable", { base_url: "http://localhost:8081" });
+  return new ApiTransportError(problem, {
+    apiUrl: "http://localhost:8081",
+    networkCode: "ECONNREFUSED",
+  });
+}
+
 describe("runSummarizePdfPipeline", () => {
-  it("calls the SDK with the bundle, pipe code, and a Document input envelope", async () => {
+  it("calls the SDK with the method's tree, pipe code, and a Document input envelope", async () => {
     execute.mockResolvedValue(summaryOutput());
 
     const result = await runSummarizePdfPipeline({
@@ -45,9 +60,10 @@ describe("runSummarizePdfPipeline", () => {
       filename: "invoice.pdf",
     });
 
+    expect(loadMethodTree).toHaveBeenCalledWith("summarize-pdf");
     expect(execute).toHaveBeenCalledWith({
       pipe_code: "summarize_pdf.summarize_pdf",
-      mthds_contents: ["DUMMY_BUNDLE_TOML"],
+      tree: METHOD_TREE,
       inputs: {
         document: {
           concept: "Document",
@@ -82,13 +98,7 @@ describe("runSummarizePdfPipeline", () => {
   });
 
   it("classifies SDK errors into a structured PipelineError", async () => {
-    execute.mockRejectedValue(
-      new ApiUnreachableError(
-        "Could not reach MTHDS API at http://localhost:8081 (ECONNREFUSED)",
-        "http://localhost:8081",
-        "ECONNREFUSED",
-      ),
-    );
+    execute.mockRejectedValue(unreachable());
 
     const result = await runSummarizePdfPipeline({
       dataUrl: PDF_DATA_URL,
@@ -98,5 +108,21 @@ describe("runSummarizePdfPipeline", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.kind).toBe("api_unreachable");
+  });
+
+  it("reports a method directory it cannot list without calling the SDK", async () => {
+    loadMethodTree.mockRejectedValue(
+      new MethodLoadError("summarize-pdf", "not_found", "Cannot read 'methods/summarize-pdf'"),
+    );
+
+    const result = await runSummarizePdfPipeline({
+      dataUrl: PDF_DATA_URL,
+      filename: "invoice.pdf",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe("method_load_failed");
+    expect(execute).not.toHaveBeenCalled();
   });
 });

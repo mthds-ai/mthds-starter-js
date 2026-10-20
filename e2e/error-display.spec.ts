@@ -1,15 +1,15 @@
 import { test, expect } from "@playwright/test";
 
 // Verifies the developer-friendly error UX when the MTHDS API isn't reachable.
-// Runs against whatever MTHDS_API_URL the dev server is using; the default
-// .env in this repo points at http://127.0.0.1:8081 with no API there, which
-// is the "I just cloned the starter" failure mode this UX is designed for.
+// Runs against whatever MTHDS_BASE_URL the dev server is using; the shipped
+// .env.example points at http://127.0.0.1:8081 with no API there, which is
+// the "I just cloned the starter" failure mode this UX is designed for.
 //
 // Skip the whole suite if the API responds — we'd hit the live happy path
 // instead, which is already covered by extract.spec.ts.
 test.describe("offline-API error display", () => {
   test.beforeAll(async () => {
-    const apiUrl = process.env.MTHDS_API_URL ?? "http://127.0.0.1:8081";
+    const apiUrl = process.env.MTHDS_BASE_URL ?? "http://127.0.0.1:8081";
     let reachable = false;
     try {
       const res = await fetch(`${apiUrl.replace(/\/+$/, "")}/health`, {
@@ -36,10 +36,10 @@ test.describe("offline-API error display", () => {
     const alert = page.getByRole("alert").filter({ hasText: "MTHDS API not reachable" });
     await expect(alert).toBeVisible({ timeout: 30_000 });
 
-    // The recovery hint should include a runnable command pointing at the
-    // sibling pipelex-api repo.
-    await expect(alert).toContainText(/cd \.\.\/pipelex-api/);
-    await expect(alert).toContainText("make run");
+    // The recovery hint should include a runnable command that starts a local
+    // MTHDS API, Pipelex's pipelex-api image.
+    await expect(alert).toContainText("docker run");
+    await expect(alert).toContainText("pipelex/pipelex-api");
 
     // Technical details are collapsible but present in the DOM.
     await expect(alert.getByText("Technical details")).toBeVisible();
