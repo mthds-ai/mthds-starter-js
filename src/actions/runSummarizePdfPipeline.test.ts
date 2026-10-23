@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ApiUnreachableError } from "mthds/errors";
+import { ApiTransportError, buildProblem } from "mthds/errors";
 
 const execute = vi.fn();
 
 vi.mock("@/lib/loadBundle", () => ({
-  loadSummarizePdfBundle: vi.fn().mockResolvedValue("DUMMY_BUNDLE_TOML"),
+  loadSummarizePdfBundle: vi.fn().mockResolvedValue({ "main.mthds": "DUMMY_BUNDLE_TOML" }),
 }));
 
 vi.mock("@/lib/mthdsClient", () => ({
@@ -32,12 +32,21 @@ function summaryOutput() {
   };
 }
 
+/** The error the SDK raises when nothing answers at the API's base URL. */
+function unreachable(): ApiTransportError {
+  const apiUrl = "http://localhost:8081";
+  return new ApiTransportError(buildProblem("client.unreachable", { base_url: apiUrl }), {
+    apiUrl,
+    networkCode: "ECONNREFUSED",
+  });
+}
+
 beforeEach(() => {
   execute.mockReset();
 });
 
 describe("runSummarizePdfPipeline", () => {
-  it("calls the SDK with the bundle, pipe code, and a Document input envelope", async () => {
+  it("calls the SDK with the method's files, pipe code, and a Document input envelope", async () => {
     execute.mockResolvedValue(summaryOutput());
 
     const result = await runSummarizePdfPipeline({
@@ -47,7 +56,7 @@ describe("runSummarizePdfPipeline", () => {
 
     expect(execute).toHaveBeenCalledWith({
       pipe_code: "summarize_pdf.summarize_pdf",
-      mthds_contents: ["DUMMY_BUNDLE_TOML"],
+      files: { "main.mthds": "DUMMY_BUNDLE_TOML" },
       inputs: {
         document: {
           concept: "Document",
@@ -65,30 +74,25 @@ describe("runSummarizePdfPipeline", () => {
     const result = await runSummarizePdfPipeline({ dataUrl: "", filename: "" });
     expect(result).toEqual({
       ok: false,
-      error: expect.objectContaining({ kind: "bad_request" }),
+      error: expect.objectContaining({ domain: "input" }),
     });
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("rejects a non-PDF data URL as unsupported_file_type without calling the SDK", async () => {
+  it("rejects a non-PDF data URL as an unsupported file type without calling the SDK", async () => {
     const result = await runSummarizePdfPipeline({
       dataUrl: "data:image/png;base64,AAAA",
       filename: "photo.png",
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.kind).toBe("unsupported_file_type");
+    expect(result.error.domain).toBe("input");
+    expect(result.error.title).toBe("Unsupported file type");
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("classifies SDK errors into a structured PipelineError", async () => {
-    execute.mockRejectedValue(
-      new ApiUnreachableError(
-        "Could not reach MTHDS API at http://localhost:8081 (ECONNREFUSED)",
-        "http://localhost:8081",
-        "ECONNREFUSED",
-      ),
-    );
+  it("presents an SDK error from its problem", async () => {
+    execute.mockRejectedValue(unreachable());
 
     const result = await runSummarizePdfPipeline({
       dataUrl: PDF_DATA_URL,
@@ -97,6 +101,6 @@ describe("runSummarizePdfPipeline", () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.kind).toBe("api_unreachable");
+    expect(result.error.code).toBe("client.unreachable");
   });
 });

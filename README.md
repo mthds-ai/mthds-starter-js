@@ -33,20 +33,24 @@ make dev
 
 The app reads two variables from `.env.local`, which git ignores:
 
-| Variable        | Purpose                                             | Value in `.env.example` |
-| --------------- | --------------------------------------------------- | ----------------------- |
-| `MTHDS_API_URL` | Base URL of your MTHDS API, host only, with no path | `http://127.0.0.1:8081` |
-| `MTHDS_API_KEY` | API key the SDK sends to that API as a bearer token | `test-api-key`          |
+| Variable         | Purpose                                             | Value in `.env.example` |
+| ---------------- | --------------------------------------------------- | ----------------------- |
+| `MTHDS_BASE_URL` | Base URL of your MTHDS API, host only, with no path | `http://127.0.0.1:8081` |
+| `MTHDS_API_KEY`  | API key the SDK sends to that API as a bearer token | `test-api-key`          |
 
-Always set `MTHDS_API_URL`: when it is unset, the SDK falls back to its own default API rather than yours.
+Always set `MTHDS_BASE_URL`: when it is unset, the SDK falls back to its own default API rather than yours.
 
 ## How it works
 
 1. The browser calls a Server Action, one per method: `runHelloPipeline`, `runSummarizePdfPipeline` or `runGenerateImagePipeline`.
-2. The action reads the method's `.mthds` bundle from disk and calls `MthdsApiClient.execute()` with the bundle, the pipe to run and the inputs. It names the pipe by its qualified reference, the bundle's domain then the pipe's code (`hello.extract_entities`), so the reference stays exact whatever else is loaded.
+2. The action reads the method's `.mthds` bundle from disk and calls `MthdsApiClient.execute()` with the method, the pipe to run and the inputs. The method travels as its tree, the `files` map from each file's path in the method to its content, here the one file `main.mthds`. The action names the pipe by its qualified reference, the bundle's domain then the pipe's code (`hello.extract_entities`), so the reference stays exact whatever else is loaded.
 3. The MTHDS API runs the pipe and returns its output, loosely typed.
 4. A `parseXxx()` narrower in `src/types/` checks that output and returns a typed value.
-5. The page renders the value, or `<ErrorDisplay>` renders the classified `PipelineError` the action returned instead of throwing.
+5. The page renders the value, or `<ErrorDisplay>` renders the `PipelineError` the action returned instead of throwing.
+
+### When a run fails
+
+Every error the `mthds` SDK raises carries the MTHDS protocol's problem document, and the app shows each failure from that problem, never from an error's class or message. `<ErrorDisplay>` shows the problem's title and detail, its next step, and who must act, which sets its tone: amber when the fix is on the app's side (the request, the method or the account), red when it is the API's (its set-up or a failure of the runtime). Under "Technical details" it shows the problem's code and the request id to hand to whoever runs the API. For some next steps the app adds its own help: a missing or refused key shows the `MTHDS_API_KEY` line for `.env.local`, a configuration problem points at `.env.local` or at the API's own set-up, a method that does not validate points at its bundle, and an API that cannot be reached says to start it. A failure the app catches itself, such as an output its narrower cannot read, is shown with the same layout and no code.
 
 A file input, such as the PDF, is read into a data URL in the browser and wrapped in an MTHDS `Document` input on the server, and a generated image comes back as a URL. [File and image inputs](docs/file-and-image-inputs.md) explains both.
 
@@ -60,8 +64,8 @@ src/
   actions/                    # 'use server' Server Actions, one per method
   lib/
     mthdsClient.ts            # MthdsApiClient singleton
-    loadBundle.ts             # reads the .mthds bundles from disk
-    errors.ts                 # classifyPipelineError + PipelineError model
+    loadBundle.ts             # reads each .mthds bundle into the method's files map
+    errors.ts                 # classifyPipelineError: a problem → PipelineError
     fileEncoding.ts           # data-URL validation + Document input envelope
     clientFile.ts             # browser File → base64 data URL
   components/                 # ExampleTabs + per-example form and result components

@@ -32,15 +32,15 @@ src/
     runGenerateImagePipeline.ts
   lib/
     mthdsClient.ts          # MthdsApiClient singleton factory
-    loadBundle.ts             # fs.readFile of the .mthds bundles
-    errors.ts                 # classifyPipelineError + PipelineError display model
+    loadBundle.ts             # reads each .mthds bundle into the method's `files` map
+    errors.ts                 # classifyPipelineError: a problem document → PipelineError display model
     fileEncoding.ts           # data-URL validation + Document input envelope (server)
     clientFile.ts             # browser File → base64 data URL (client)
   components/
     ExampleTabs.tsx           # client component — tab switcher for the 3 examples
     EntityForm/PdfForm/ImageForm.tsx        # client components (per-example input)
     EntityResult/PdfSummaryResult/ImageResult.tsx  # server components (render output)
-    ErrorDisplay.tsx          # server component (renders classified PipelineError)
+    ErrorDisplay.tsx          # server component (renders a PipelineError, its tone from the domain)
   types/
     pipelineError.ts          # BadPipelineOutputError + BadImageOutputError (tagged)
     helloPipeline.ts          # ExtractedEntities + parseEntities()
@@ -50,6 +50,7 @@ e2e/
   extract.spec.ts             # Playwright e2e (hits live API)
   summarize-pdf.spec.ts
   generate-image.spec.ts
+  error-display.spec.ts       # offline: the unreachable-API problem, rendered
 docs/
   file-and-image-inputs.md    # the file-input and image-output path, for human readers
   development.md              # make targets, optional e2e, local SDK development
@@ -59,14 +60,14 @@ docs/
 
 - **`methods/`** — `.mthds` bundles (TOML). Treat them as first-class artifacts, not embedded strings. Author and change them with the [Pipelex plugin](https://github.com/Pipelex/pipelex-plugins)'s skills (`/pipelex-design` to build one, `/pipelex-edit` to change one), whose hook validates every `.mthds` edit.
 - **`src/actions/`** — Server Actions (`"use server"`). The only place that calls the MTHDS SDK. Keep them thin: load bundle → call SDK → narrow output → return.
-- **`src/lib/`** — Server-side utilities. No React. Two deliberate client-touching exceptions: `errors.ts` (its types cross the server→client boundary, and `classifyTransportError` runs client-side), and `clientFile.ts` (a browser `FileReader` wrapper imported only by client components). `fileEncoding.ts` is pure (no React, no `process.env`) so it is safe to import from either side. Because `errors.ts` is bundled into the client, it imports the SDK error classes from the **`mthds/errors`** subpath, never the top-level `mthds` barrel — the barrel pulls `MthdsApiClient` → `node:fs` into the graph, which a client bundler cannot externalize and which breaks `make build`. Only `mthdsClient.ts` (server-only) imports `MthdsApiClient` from `mthds`.
+- **`src/lib/`** — Server-side utilities. No React. Two deliberate client-touching exceptions: `errors.ts` (its types cross the server→client boundary, and `classifyTransportError` runs client-side), and `clientFile.ts` (a browser `FileReader` wrapper imported only by client components). `fileEncoding.ts` is pure (no React, no `process.env`) so it is safe to import from either side. Because `errors.ts` is bundled into the client, it imports the problem document's readers and the SDK's error classes from the **`mthds/errors`** subpath, never the top-level `mthds` barrel — the barrel pulls `MthdsApiClient` → `node:fs` into the graph, which a client bundler cannot externalize and which breaks `make build`. Only `mthdsClient.ts` (server-only) imports `MthdsApiClient` from `mthds`.
 - **`src/components/`** — React components. `"use client"` only when the component uses hooks, event handlers, or browser APIs.
 - **`src/types/`** — TS types and runtime narrowers (`parseXxx()`). Narrowers throw on shape mismatch; that's deliberate (system boundary).
 - **`docs/`** — reference for human readers, linked from the README, which stays the front page. A change to what a page describes updates that page in the same change.
 
 ## MTHDS Integration Pattern
 
-The Server Action pattern: bundle on disk → SDK call → narrow → return discriminated union.
+The Server Action pattern: bundle on disk → the method's `files` map → SDK call → narrow → return discriminated union.
 
 ```ts
 // src/actions/runHelloPipeline.ts
@@ -82,21 +83,15 @@ export type RunHelloPipelineResult =
 
 export async function runHelloPipeline(text: string): Promise<RunHelloPipelineResult> {
   try {
-    const bundle = await loadHelloBundle();
+    const files = await loadHelloBundle(); // { "main.mthds": "<the bundle's TOML>" }
     const response = await getMthdsClient().execute({
       pipe_code: "hello.extract_entities",
-      mthds_contents: [bundle],
+      files,
       inputs: { text: text.trim() },
     });
     return { ok: true, entities: parseEntities(response.pipe_output) };
   } catch (err) {
-    return {
-      ok: false,
-      error: classifyPipelineError(err, {
-        apiUrl: process.env.MTHDS_API_URL,
-        hasApiKey: Boolean(process.env.MTHDS_API_KEY),
-      }),
-    };
+    return { ok: false, error: classifyPipelineError(err) };
   }
 }
 ```
@@ -104,11 +99,13 @@ export async function runHelloPipeline(text: string): Promise<RunHelloPipelineRe
 Conventions:
 
 - **Bundle source**: ship `.mthds` files in the repo at `methods/<name>/main.mthds` and read them at request time with `fs.readFile`. Do **not** inline bundle TOML as a string in `.ts` — bundles are first-class.
+- **The method travels as its tree**: `execute` takes the method as `files`, a map from tree path to file entry (the protocol's method tree), never a list of bundle texts. Each example is a single `.mthds` file, so `loadBundle.ts` returns `{ "main.mthds": <its text> }`. A method of several files (Python, templates, images) is listed from its directory with the SDK's `listMethodTree` and passed as `tree` instead, and the client chooses whether each file travels inline or by hash.
 - **One client**: instantiate `MthdsApiClient` once via `getMthdsClient()`. Never `new MthdsApiClient()` directly in actions or components.
 - **Qualified pipe reference**: pass `pipe_code` as `<domain>.<pipe_code>` — the `domain` declared at the top of the bundle, then the pipe's code (`hello.extract_entities`). The qualified form is an exact key. A bare code only works while one domain declares it: the reference runtime, Pipelex, searches every domain for a bare code and answers `422` once two of them declare it.
 - **Narrow at the boundary**: the SDK returns loosely-typed `pipe_output`. Always pass it through a `parseXxx()` narrower in `src/types/` that throws a tagged subclass of `Error` (e.g. `BadPipelineOutputError`) on shape mismatch. Do not `as` your way through.
-- **Return classified errors, don't throw across the server→client boundary**: server actions return `{ ok: true, ... } | { ok: false, error: PipelineError }`. Throwing works in dev but Next.js production builds strip server-action error messages to opaque digests, which destroys the developer-facing error UX. Wrap the SDK call in `try/catch`, hand the caught value to `classifyPipelineError(err, env)`, and return the structured error. Render it client-side with `<ErrorDisplay>`.
-- **Add new error kinds in `src/lib/errors.ts`**: extend `PipelineErrorKind`, add a branch in `classifyPipelineError`, and cover it in `src/lib/errors.test.ts` (table-driven). Keep `classifyPipelineError` pure — env passed in by caller, no `process.env` reads inside. Client-side rejections of awaited Server Actions go through `classifyTransportError` instead — the SDK error classes don't survive the server→client boundary, so they would never `instanceof`-match on the client. Pre-flight validation kinds (`file_too_large`, `unsupported_file_type`) are the exception: they are built inline by a Server Action _before_ the SDK call (there is no thrown error to classify), so they have no `classifyPipelineError` branch.
+- **Return classified errors, don't throw across the server→client boundary**: server actions return `{ ok: true, ... } | { ok: false, error: PipelineError }`. Throwing works in dev but Next.js production builds strip server-action error messages to opaque digests, which destroys the developer-facing error UX. Wrap the SDK call in `try/catch`, hand the caught value to `classifyPipelineError(err)`, and return the structured error. Render it client-side with `<ErrorDisplay>`.
+- **Present an SDK failure from its problem, never from its class**: every error the `mthds` SDK raises carries the protocol's problem document (`err.problem`), and `classifyPipelineError` reads only that: the title and the detail, the next step, who must act (`domain`, which sets `<ErrorDisplay>`'s tone), the code and the request id, which go under "Technical details". The app's own help is chosen by `next_step.kind` (`check_credentials` → the `MTHDS_API_KEY` snippet, `fix_configuration` → the app's `.env.local`, either of them on an `operator` problem → the API's own set-up, `change_method` → the bundle) and by one code, `client.unreachable` → start the API. Never branch on an error's class name, a server class name or the message text; to help with another situation, add a case on a step kind or a code in `hintFor` and cover it in `src/lib/errors.test.ts` (table-driven). Keep `classifyPipelineError` pure — no `process.env` reads inside.
+- **Failures the app catches itself have no problem**: the tagged errors of the `parseXxx()` narrowers, a missing bundle file, an empty input and a file refused before sending are written by hand as a `PipelineError` with the `domain` that must act and no code. The pre-flight file checks (`fileInputErrorToPipelineError`) are built inline by a Server Action _before_ the SDK call, so they never reach `classifyPipelineError`. Client-side rejections of awaited Server Actions go through `classifyTransportError` instead — the SDK's errors don't survive the server→client boundary, so no problem reaches the client to read.
 - **Wrap awaited Server Action calls in `try/catch` on the client** and route catches through `classifyTransportError(err)`. Even though the action's own catch turns application errors into `{ ok: false, error }`, the await itself can still reject (network drop, dev server crash, stale Server Action ID after a deploy) — without the client-side catch, the rejection escapes `startTransition` and bypasses `<ErrorDisplay>` via React's error boundary.
 
 ### File & image inputs
@@ -124,7 +121,7 @@ Text inputs are plain strings. File inputs (PDFs, images) take one extra step, d
 To add a new pipeline:
 
 1. Create `methods/<name>/main.mthds` (use `/pipelex-design`).
-2. Add `loadXxxBundle()` in `src/lib/loadBundle.ts` (or one helper per bundle).
+2. Add `loadXxxBundle()` in `src/lib/loadBundle.ts` (or one helper per bundle), returning the method's `files` map.
 3. Add the type + narrower (with a tagged error subclass) in `src/types/<name>.ts`.
 4. Add a Server Action in `src/actions/run<Name>Pipeline.ts` that names the pipe as `<domain>.<pipe_code>`, returns a `Run<Name>PipelineResult` union and uses `classifyPipelineError` in the catch.
 5. Wire it from a component, render `<ErrorDisplay error={result.error} />` when `!result.ok`, and wrap the awaited action call in `try/catch` so transport-level rejections route through `classifyTransportError`. See `src/components/EntityForm.tsx` for the canonical pattern.
@@ -158,12 +155,12 @@ Enforced via Husky + lint-staged on commit.
 - **Library**: `@testing-library/react` + `@testing-library/jest-dom`
 - **Location**: co-located `.test.ts` / `.test.tsx` next to the source file
 - **Queries**: prefer accessible queries (`getByRole`, `getByLabelText`) over `getByTestId`
-- **Mocking the SDK**: mock `@/lib/mthdsClient` with `vi.mock`, returning `{ execute: vi.fn() }`. Do **not** mock the `mthds` package directly — it's harder to wire as a constructor and the indirection adds noise.
+- **Mocking the SDK**: mock `@/lib/mthdsClient` with `vi.mock`, returning `{ execute: vi.fn() }`. Do **not** mock the `mthds` package directly — it's harder to wire as a constructor and the indirection adds noise. To fail an SDK call, reject with the error the SDK raises, built from a registered problem (`new ApiTransportError(buildProblem("client.unreachable", { base_url }), { apiUrl })`, `new ApiResponseError(problem, facts)`), as the action tests and `src/lib/errors.test.ts` do.
 
 ### E2E (Playwright)
 
 - **Location**: `e2e/*.spec.ts`
-- **Optional, and gated.** The three live-API specs (`extract`, `summarize-pdf`, `generate-image`) hit the live MTHDS API using `MTHDS_API_KEY` from `.env.local` and cost an LLM call each. Two guards make this safe: (1) they **auto-skip** when no key is set — `requireLiveApi()` in `e2e/liveApi.ts` calls `test.skip()`, and `playwright.config.ts` loads `.env.local` via `@next/env` so a configured key is visible to the runner; (2) `make test-e2e` **prompts for confirmation** before spending (the `confirm-live-e2e` target — skipped in CI / non-TTY shells, bypass with `CONFIRM=1`). The fourth spec, `error-display`, tests the offline error UX — it needs no key, is **not** guarded, and runs out of the box.
+- **Optional, and gated.** The three live-API specs (`extract`, `summarize-pdf`, `generate-image`) hit the live MTHDS API using `MTHDS_API_KEY` from `.env.local` and cost an LLM call each. Two guards make this safe: (1) they **auto-skip** when no key is set — `requireLiveApi()` in `e2e/liveApi.ts` calls `test.skip()`, and `playwright.config.ts` loads `.env.local` via `@next/env` so a configured key is visible to the runner; (2) `make test-e2e` **prompts for confirmation** before spending (the `confirm-live-e2e` target — skipped in CI / non-TTY shells, bypass with `CONFIRM=1`). The fourth spec, `error-display`, tests the offline error UX, the SDK's `client.unreachable` problem as `<ErrorDisplay>` renders it — it needs no key, is **not** guarded, and runs out of the box.
 - **Excluded from `make all`** — run explicitly with `make test-e2e`
 - **First-time setup**: `npx playwright install chromium`
 - **Excluded from**: `vitest.config.mts` (`exclude: ["e2e/**", ...]`) and the base `tsconfig.json` (`exclude: [..., "e2e"]`) so unit-test infra and Next's build typecheck don't pick up Playwright specs
@@ -215,7 +212,8 @@ Other targets that matter:
 - **No raw `fetch()` to the MTHDS API** — always go through `MthdsApiClient`. (If you find a missing capability in the SDK, fix it upstream in `mthds-js`, don't bypass it here.)
 - **No `as ExtractedEntities` casts on SDK output** — write or extend a `parseXxx()` narrower instead.
 - **No `try/catch` that swallows errors silently** in narrowers — throw a tagged subclass. The action's outer catch routes it through `classifyPipelineError`.
-- **No `throw new Error(...)` from server actions for known failure modes** — return `{ ok: false, error: classifyPipelineError(err, env) }` so the structured error survives the server→client boundary in production.
+- **No `throw new Error(...)` from server actions for known failure modes** — return `{ ok: false, error: classifyPipelineError(err) }` so the structured error survives the server→client boundary in production.
+- **No switch on an error's class or a server class name** — read the problem's `code`, `domain` and `next_step.kind`.
 - **No relative imports** across folders — always `@/`.
 - **No default exports** for components (only for App Router pages/layouts).
 - **No `index.ts` barrel files**.
