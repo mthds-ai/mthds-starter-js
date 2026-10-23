@@ -90,7 +90,7 @@ export function fileInputErrorToPipelineError(
   filename: string,
 ): PipelineError {
   return {
-    kind: fileError.kind,
+    domain: "input",
     title: fileError.kind === "file_too_large" ? "PDF too large" : "Unsupported file type",
     message: fileError.message,
     details: `${fileError.kind}: ${filename || "(no filename)"}`,

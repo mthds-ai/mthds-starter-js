@@ -23,7 +23,7 @@ export async function runGenerateImagePipeline(
     return {
       ok: false,
       error: {
-        kind: "bad_request",
+        domain: "input",
         title: "Prompt required",
         message: "Describe the image you want to generate.",
         details: "Empty input",
@@ -32,12 +32,12 @@ export async function runGenerateImagePipeline(
   }
 
   try {
-    const bundle = await loadGenerateImageBundle();
+    const files = await loadGenerateImageBundle();
     const client = getMthdsClient();
     const response = await client.execute({
       // `<domain>.<pipe_code>` names exactly one pipe; a bare code is searched across every domain.
       pipe_code: "generate_image.generate_image",
-      mthds_contents: [bundle],
+      files,
       inputs: { image_prompt: trimmed },
     });
     const image = parseGeneratedImage(response.pipe_output);
@@ -45,10 +45,7 @@ export async function runGenerateImagePipeline(
   } catch (err) {
     return {
       ok: false,
-      error: classifyPipelineError(err, {
-        apiUrl: process.env.MTHDS_API_URL,
-        hasApiKey: Boolean(process.env.MTHDS_API_KEY),
-      }),
+      error: classifyPipelineError(err),
     };
   }
 }

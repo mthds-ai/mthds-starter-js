@@ -42,10 +42,12 @@ describe("ImageForm", () => {
     mockedAction.mockResolvedValueOnce({
       ok: false,
       error: {
-        kind: "server_error",
-        title: "Image model unavailable",
-        message: "no backend",
-        details: "ApiResponseError: HTTP 500",
+        domain: "operator",
+        title: "This deployment serves no backend for the model",
+        message:
+          "The image model 'gpt-image-1-mini' exists, but this deployment does not serve it.",
+        code: "model.unavailable",
+        details: "POST /v1/execute answered HTTP 501 Not Implemented",
       },
     });
 
@@ -53,10 +55,10 @@ describe("ImageForm", () => {
     submitForm();
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(screen.getByText("Image model unavailable")).toBeInTheDocument();
+    expect(screen.getByText("This deployment serves no backend for the model")).toBeInTheDocument();
   });
 
-  it("surfaces a transport_error when the awaited action rejects", async () => {
+  it("surfaces a transport failure when the awaited action rejects", async () => {
     // Regression guard, mirroring EntityForm: a rejected await inside
     // startTransition must route through <ErrorDisplay>, not React's boundary.
     mockedAction.mockRejectedValueOnce(new TypeError("Failed to fetch"));

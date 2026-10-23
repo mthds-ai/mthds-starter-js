@@ -37,10 +37,11 @@ describe("EntityForm", () => {
     mockedAction.mockResolvedValueOnce({
       ok: false,
       error: {
-        kind: "auth_missing",
-        title: "MTHDS API key missing",
-        message: "no key configured",
-        details: "ApiResponseError: HTTP 401",
+        domain: "account",
+        title: "No credential was sent",
+        message: "This route needs a credential, and the request carried none.",
+        code: "auth.missing_credential",
+        details: "POST /v1/execute answered HTTP 401 Unauthorized",
       },
     });
 
@@ -48,10 +49,10 @@ describe("EntityForm", () => {
     submitForm();
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(screen.getByText("MTHDS API key missing")).toBeInTheDocument();
+    expect(screen.getByText("No credential was sent")).toBeInTheDocument();
   });
 
-  it("surfaces a transport_error when the awaited action rejects", async () => {
+  it("surfaces a transport failure when the awaited action rejects", async () => {
     // Regression guard: without the client-side try/catch in EntityForm, a
     // rejected await inside startTransition bubbles to React's error boundary
     // and bypasses <ErrorDisplay> entirely.

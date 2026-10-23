@@ -1,30 +1,26 @@
-// Import the SDK error classes from the client-safe `mthds/errors` subpath, not
-// the top-level `mthds` barrel. This module is bundled into the client (client
-// components import `classifyTransportError` + the `PipelineError` type from
-// here), and the top-level barrel pulls `MthdsApiClient` → `node:fs` into the
-// graph, which a client bundler cannot externalize. `mthds/errors` re-exports
-// only the exception classes and carries no Node built-ins.
-import { ApiResponseError, ApiUnreachableError, ClientAuthenticationError } from "mthds/errors";
+// Import from the client-safe `mthds/errors` subpath, not the top-level `mthds`
+// barrel. This module is bundled into the client (client components import
+// `classifyTransportError` + the `PipelineError` type from here), and the
+// top-level barrel pulls `MthdsApiClient` → `node:fs` into the graph, which a
+// client bundler cannot externalize. `mthds/errors` exports the problem
+// document's types and readers and the SDK's error classes, and carries no Node
+// built-ins.
+import {
+  ApiResponseError,
+  ApiTransportError,
+  formatItem,
+  formatLocation,
+  formatSuggestedFix,
+  isProblemError,
+  problemDomain,
+  problemRequestId,
+  problemRetry,
+  problemStepKind,
+  reportedProblem,
+  type Problem,
+  type ProblemDomain,
+} from "mthds/errors";
 import { BadImageOutputError, BadPipelineOutputError } from "@/types/pipelineError";
-
-export type PipelineErrorKind =
-  | "api_unreachable"
-  | "config_missing"
-  | "auth_missing"
-  | "auth_invalid"
-  | "bad_request"
-  | "server_error"
-  | "bundle_load_failed"
-  | "bad_response"
-  | "bad_image_output"
-  | "transport_error"
-  // Pre-flight validation kinds: built inline by a Server Action before the
-  // SDK call (see `runSummarizePdfPipeline` / `fileInputErrorToPipelineError`),
-  // never produced by `classifyPipelineError` — there is no thrown error to
-  // classify. They are still valid kinds so `<ErrorDisplay>` renders them.
-  | "file_too_large"
-  | "unsupported_file_type"
-  | "unknown";
 
 export interface ErrorHint {
   summary: string;
@@ -34,186 +30,177 @@ export interface ErrorHint {
   docs?: { label: string; href: string };
 }
 
+/**
+ * What `<ErrorDisplay>` renders. A failure of the MTHDS API, or one the SDK
+ * detected itself, is read from its problem document: its title and detail,
+ * its next step, who must act (`domain`), its code and its request id. A
+ * failure the app catches itself (an empty input, a file refused before
+ * sending, an output the app cannot read) is written here, with no code.
+ */
 export interface PipelineError {
-  kind: PipelineErrorKind;
-  /** Headline, e.g. "MTHDS API not reachable". */
+  /**
+   * Who must act, the problem's `domain` read into the protocol's closed list:
+   * the caller (`input`), the method's author, the account's owner, whoever
+   * runs the API (`operator`), or nobody beforehand (`runtime`). It sets the
+   * tone `<ErrorDisplay>` renders with.
+   */
+  domain: ProblemDomain;
+  /** Headline: the problem's title, or the app's own. */
   title: string;
-  /** 1–2 sentences explaining what happened in plain language. */
+  /** What happened, in one or two sentences: the problem's detail, or the app's own. */
   message: string;
+  /** The problem's next step, as the API or the SDK wrote it. */
+  nextStep?: string;
+  /** This app's own help for that step: where to look and what to type. */
   hint?: ErrorHint;
+  /** The problem's code, under "Technical details". Absent for a failure the app caught itself. */
+  code?: string;
+  /** The API's id for the request that failed, to hand to whoever runs the API. */
+  requestId?: string;
   /** Raw technical info for the collapsible "Technical details" section. */
   details: string;
 }
 
-export interface ClassifyEnv {
-  apiUrl: string | undefined;
-  hasApiKey: boolean;
-}
-
-export function classifyPipelineError(err: unknown, env: ClassifyEnv): PipelineError {
-  if (err instanceof ApiUnreachableError) return classifyUnreachable(err, env);
-  if (err instanceof ApiResponseError) return classifyResponse(err, env);
-  if (err instanceof ClientAuthenticationError) return classifyClientAuth(err, env);
+/**
+ * Turn whatever a Server Action caught into a `PipelineError`. Every error the
+ * `mthds` SDK raises carries a problem document, so it is read from that
+ * problem alone, never from its class or a server class name. The tagged
+ * errors of the app's own output narrowers and a missing bundle file are
+ * classified here, since no problem describes them.
+ */
+export function classifyPipelineError(err: unknown): PipelineError {
+  if (isProblemError(err)) return presentProblem(reportedProblem(err), answerLines(err));
   if (err instanceof BadImageOutputError) return classifyBadImageOutput(err);
   if (err instanceof BadPipelineOutputError) return classifyBadOutput(err);
   if (isFsNotFound(err)) return classifyBundleMissing(err);
   return classifyUnknown(err);
 }
 
-function classifyUnreachable(err: ApiUnreachableError, env: ClassifyEnv): PipelineError {
-  const url = err.apiUrl || env.apiUrl || "(unknown)";
-  const isLocal = isLocalhostUrl(url);
-  const codeSuffix = err.code ? ` (${err.code})` : "";
-  const baseDetails = `${err.name}: ${err.message}${err.cause instanceof Error ? `\nCaused by: ${err.cause.message}` : ""}`;
-
-  if (isLocal) {
-    return {
-      kind: "api_unreachable",
-      title: "MTHDS API not reachable",
-      message: `Tried to reach the local API at ${url}${codeSuffix}, but nothing answered. The starter expects a local MTHDS API — the open-source pipelex-api runner — to be running on the same host.`,
-      hint: {
-        summary: "Start the local MTHDS API in a sibling repo, then retry:",
-        code: "cd ../pipelex-api && make run",
-        codeLanguage: "bash",
-      },
-      details: baseDetails,
-    };
-  }
-
+function presentProblem(problem: Problem, answer: string[]): PipelineError {
+  const domain = problemDomain(problem);
   return {
-    kind: "api_unreachable",
-    title: "MTHDS API not reachable",
-    message: `Tried to reach ${url}${codeSuffix}, but the request did not get a response. Check the URL and your network connection.`,
-    hint: {
-      summary: "Verify MTHDS_API_URL in .env.local points to a reachable API.",
-      code: `MTHDS_API_URL=${url}`,
-      codeLanguage: "env",
-    },
-    details: baseDetails,
+    domain,
+    title: problem.title,
+    message: problemSentences(problem),
+    nextStep: problem.next_step.detail,
+    hint: hintFor(problem, domain),
+    code: problem.code,
+    requestId: problemRequestId(problem),
+    details: problemDetails(problem, domain, answer),
   };
 }
 
-function classifyResponse(err: ApiResponseError, env: ClassifyEnv): PipelineError {
-  const detailsLines = [
-    `${err.name}: HTTP ${err.status} ${err.statusText}`.trim(),
-    err.errorType ? `error_type: ${err.errorType}` : null,
-    err.serverMessage ? `server message: ${err.serverMessage}` : null,
-    err.responseBody ? `body: ${truncate(err.responseBody, 2000)}` : null,
-  ].filter(Boolean) as string[];
-  const details = detailsLines.join("\n");
-
-  if (err.status === 401 || err.status === 403) {
-    if (!env.hasApiKey) {
-      return {
-        kind: "auth_missing",
-        title: "MTHDS API key missing",
-        message: `${err.apiUrl} rejected the request because no MTHDS_API_KEY was sent.`,
-        hint: {
-          summary: "Add your API key to .env.local and restart the dev server:",
-          code: "MTHDS_API_KEY=your-key-here",
-          codeLanguage: "env",
-        },
-        details,
-      };
-    }
-    return {
-      kind: "auth_invalid",
-      title: "MTHDS API key rejected",
-      message: `${err.apiUrl} returned ${err.status} for the credentials you provided. The MTHDS_API_KEY in .env.local is not valid for this API.`,
-      hint: {
-        summary: "Double-check the key and the API URL it's intended for.",
-        code: "MTHDS_API_KEY=your-key-here",
-        codeLanguage: "env",
-      },
-      details,
-    };
-  }
-
-  if (err.status >= 500) {
-    return classifyServerError(err, details);
-  }
-
-  return {
-    kind: "bad_request",
-    title: `MTHDS API rejected the request (HTTP ${err.status})`,
-    message:
-      err.serverMessage ?? "The API returned a client error. Inspect the request and try again.",
-    details,
-  };
-}
-
-function classifyServerError(err: ApiResponseError, details: string): PipelineError {
-  const baseTitle = `MTHDS API server error (HTTP ${err.status})`;
-  switch (err.errorType) {
-    case "CredentialsError":
-      return {
-        kind: "server_error",
-        title: "MTHDS API server is missing LLM credentials",
-        message:
-          err.serverMessage ??
-          "The MTHDS API server tried to call an LLM provider but no API key was configured for it.",
-        hint: {
-          summary: "Set the missing provider key in pipelex-api's .env, then restart the API.",
-          docs: { label: "Pipelex inference setup docs", href: "https://docs.pipelex.com/" },
-        },
-        details,
-      };
-    case "PipeOperatorModelAvailabilityError":
-      return {
-        kind: "server_error",
-        title: "No inference backend configured on the server",
-        message:
-          err.serverMessage ??
-          "The MTHDS API server has no LLM inference backend wired up to handle this pipe.",
-        hint: {
-          summary: "Configure an inference backend in pipelex-api (Pipelex AI Gateway or BYO key).",
-          docs: { label: "Pipelex inference setup docs", href: "https://docs.pipelex.com/" },
-        },
-        details,
-      };
-    case "PipeValidationError":
-    case "PipeFactoryError":
-    case "MthdsParserError":
-    case "MthdsDecodeError":
-      return {
-        kind: "server_error",
-        title: "The pipeline definition has a problem",
-        message:
-          err.serverMessage ??
-          "The MTHDS API server rejected the bundle or pipe definition. The bundle shipped with the starter may be out of sync with the server's version of the spec.",
-        details,
-      };
+/**
+ * This app's help for the problem's next step, chosen by the step's kind and
+ * by who must act. The step's own sentence is always shown; a hint adds where,
+ * in this app, the fix goes.
+ */
+function hintFor(problem: Problem, domain: ProblemDomain): ErrorHint | undefined {
+  // The one code with help of its own: a step of `retry` cannot say that the
+  // API the app points at may simply not be running.
+  if (problem.code === "client.unreachable") return startApiHint(problem);
+  switch (problemStepKind(problem)) {
+    case "check_credentials":
+      // A provider refusing the API's own key is the API's set-up, not the app's key.
+      return domain === "operator" ? RUNTIME_SETUP_HINT : API_KEY_HINT;
+    case "fix_configuration":
+      return domain === "operator" ? RUNTIME_SETUP_HINT : APP_CONFIGURATION_HINT;
+    case "change_method":
+      return BUNDLE_HINT;
     default:
-      return {
-        kind: "server_error",
-        title: baseTitle,
-        message:
-          err.serverMessage ??
-          `The API returned an unexpected error${err.errorType ? ` (${err.errorType})` : ""}.`,
-        details,
-      };
+      return undefined;
   }
 }
 
-function classifyClientAuth(err: ClientAuthenticationError, env: ClassifyEnv): PipelineError {
-  void env;
-  return {
-    kind: "config_missing",
-    title: "MTHDS API URL not configured",
-    message:
-      "The mthds SDK needs MTHDS_API_URL to know where to send pipeline requests, but it isn't set.",
-    hint: {
-      summary: "Copy .env.example to .env.local and fill it in:",
-      code: "cp .env.example .env.local",
+const API_KEY_HINT: ErrorHint = {
+  summary: "Set the key this MTHDS API accepts in .env.local, then restart the dev server:",
+  code: "MTHDS_API_KEY=your-key-here",
+  codeLanguage: "env",
+};
+
+const APP_CONFIGURATION_HINT: ErrorHint = {
+  summary:
+    "Set MTHDS_BASE_URL and MTHDS_API_KEY in .env.local, starting from the example file, then restart the dev server:",
+  code: "cp .env.example .env.local",
+  codeLanguage: "bash",
+};
+
+const RUNTIME_SETUP_HINT: ErrorHint = {
+  summary:
+    "This is the MTHDS API's own set-up, not this app's: whoever runs the API configures it. On a Pipelex runner you run yourself, that means its inference backends and their keys.",
+  docs: {
+    label: "Pipelex API server configuration",
+    href: "https://docs.pipelex.com/latest/api-server/configuration/",
+  },
+};
+
+const BUNDLE_HINT: ErrorHint = {
+  summary:
+    "Fix the example's bundle, methods/<name>/main.mthds, then run it again. Each fault the API found is listed under Technical details.",
+};
+
+function startApiHint(problem: Problem): ErrorHint {
+  const baseUrl = typeof problem.params?.base_url === "string" ? problem.params.base_url : null;
+  const port = baseUrl ? localPort(baseUrl) : null;
+  if (baseUrl && port) {
+    return {
+      summary: `Start the MTHDS API at ${baseUrl}, then try again. To run Pipelex's runner there from its Docker image:`,
+      code: `docker run -p ${port}:8081 -e OPENAI_API_KEY=your-openai-api-key pipelex/pipelex-api:latest`,
       codeLanguage: "bash",
-    },
-    details: `${err.name}: ${err.message}`,
+    };
+  }
+  return {
+    summary:
+      "Check that MTHDS_BASE_URL in .env.local names an MTHDS API that is up, then restart the dev server:",
+    code: `MTHDS_BASE_URL=${baseUrl ?? "https://your-mthds-api.example.com"}`,
+    codeLanguage: "env",
   };
+}
+
+/** The problem's detail, then the SDK's own sentence when it built the problem with one. */
+function problemSentences(problem: Problem): string {
+  const own = problem.message;
+  return typeof own === "string" && own.length > 0 && own !== problem.detail
+    ? `${problem.detail} ${own}`
+    : problem.detail;
+}
+
+/**
+ * What the problem says beyond its sentences, for "Technical details": what
+ * the server answered, the retry verdict, the run and the location, and every
+ * fault of a problem that lists several, such as a method that does not
+ * validate. The code and the request id are fields of their own.
+ */
+function problemDetails(problem: Problem, domain: ProblemDomain, answer: string[]): string {
+  const verdict = [`domain ${domain}`, `retry ${problemRetry(problem)}`];
+  if (typeof problem.retry_after === "number") verdict.push(`after ${problem.retry_after} seconds`);
+  const lines = [...answer, verdict.join(", ")];
+  if (problem.pipeline_run_id !== undefined) lines.push(`run: ${problem.pipeline_run_id}`);
+  const where = formatLocation(problem.location);
+  if (where) lines.push(`location: ${where}`);
+  for (const item of problem.errors ?? []) {
+    lines.push(`- ${formatItem(item)}`);
+    if (item.suggested_fix !== undefined) lines.push(`  ${formatSuggestedFix(item.suggested_fix)}`);
+  }
+  return lines.join("\n");
+}
+
+/** What the error knows of the exchange beside its problem: the server's answer, or the network's failure. */
+function answerLines(err: unknown): string[] {
+  if (err instanceof ApiResponseError) {
+    const lines = [`${err.route} answered HTTP ${err.status} ${err.statusText}`.trim()];
+    if (err.answerExcerpt) lines.push(`the server said: ${err.answerExcerpt}`);
+    return lines;
+  }
+  if (err instanceof ApiTransportError && err.networkCode) {
+    return [`network error: ${err.networkCode}`];
+  }
+  return [];
 }
 
 function classifyBadOutput(err: BadPipelineOutputError): PipelineError {
   return {
-    kind: "bad_response",
+    domain: "method",
     title: "Pipeline output didn't match the expected shape",
     message:
       "The pipeline ran but its output didn't match the shape this example expects. This usually means the bundle was edited or the LLM produced something unexpected.",
@@ -224,7 +211,7 @@ function classifyBadOutput(err: BadPipelineOutputError): PipelineError {
 function classifyBadImageOutput(err: BadImageOutputError): PipelineError {
   if (err.nonWebUrl) {
     return {
-      kind: "bad_image_output",
+      domain: "operator",
       title: "Generated image isn't web-accessible",
       message:
         "The pipeline generated an image, but the MTHDS API returned a URL a browser can't load — typically a file:// path on the API server's disk. This happens when the API uses the local file storage provider.",
@@ -239,7 +226,7 @@ function classifyBadImageOutput(err: BadImageOutputError): PipelineError {
     };
   }
   return {
-    kind: "bad_image_output",
+    domain: "method",
     title: "Image generation returned no usable image",
     message:
       "The pipeline ran but its output didn't contain an image URL. The image model may have refused the prompt or returned an unexpected shape.",
@@ -250,7 +237,7 @@ function classifyBadImageOutput(err: BadImageOutputError): PipelineError {
 function classifyBundleMissing(err: unknown): PipelineError {
   const e = err as NodeJS.ErrnoException;
   return {
-    kind: "bundle_load_failed",
+    domain: "method",
     title: "Pipeline bundle not found",
     message: `Could not read the .mthds bundle from disk (${e.code ?? "fs error"}). The starter ships with extract_entities.mthds — make sure it's still there.`,
     details: `${e.name}: ${e.message}`,
@@ -265,18 +252,17 @@ function classifyBundleMissing(err: unknown): PipelineError {
  * `{ ok: false, error }` result, so a rejected await here is by construction
  * a *transport* failure — the browser couldn't deliver the request, the dev
  * server died mid-call, or the page is running against a stale build whose
- * Server Action IDs no longer resolve. The SDK error classes referenced by
- * `classifyPipelineError` only exist server-side and are stripped to opaque
- * digests when crossing the boundary in production, so they would never
- * `instanceof`-match here. Without this helper, rejections inside
- * `startTransition` bypass `<ErrorDisplay>` and bubble to React's nearest
- * error boundary instead.
+ * Server Action IDs no longer resolve. The SDK's errors only exist
+ * server-side and are stripped to opaque digests when crossing the boundary
+ * in production, so no problem document survives to be read here. Without
+ * this helper, rejections inside `startTransition` bypass `<ErrorDisplay>`
+ * and bubble to React's nearest error boundary instead.
  */
 export function classifyTransportError(err: unknown): PipelineError {
   const message = err instanceof Error ? err.message : String(err);
   const name = err instanceof Error ? err.name : "Unknown";
   return {
-    kind: "transport_error",
+    domain: "runtime",
     title: "Could not reach the server",
     message:
       "The browser couldn't deliver the request to the Next.js server. The dev server may have stopped, the network may have dropped, or this page may be running against a stale build whose Server Action IDs no longer exist on the deployed server.",
@@ -292,7 +278,7 @@ function classifyUnknown(err: unknown): PipelineError {
   const message = err instanceof Error ? err.message : String(err);
   const name = err instanceof Error ? err.name : "Unknown";
   return {
-    kind: "unknown",
+    domain: "runtime",
     title: "Something went wrong",
     message:
       "The starter caught an unexpected error. The technical details below should help track it down.",
@@ -300,12 +286,17 @@ function classifyUnknown(err: unknown): PipelineError {
   };
 }
 
-function isLocalhostUrl(url: string): boolean {
+/** The port of a base URL on this machine, or null when the URL names another host. */
+function localPort(url: string): string | null {
   try {
-    const host = new URL(url).hostname;
-    return host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1";
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    const isLocal =
+      host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "[::1]";
+    if (!isLocal) return null;
+    return parsed.port || (parsed.protocol === "https:" ? "443" : "80");
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -316,8 +307,4 @@ function isFsNotFound(err: unknown): boolean {
     "code" in err &&
     (err as { code?: unknown }).code === "ENOENT"
   );
-}
-
-function truncate(s: string, max: number): string {
-  return s.length <= max ? s : `${s.slice(0, max)}… (truncated)`;
 }
