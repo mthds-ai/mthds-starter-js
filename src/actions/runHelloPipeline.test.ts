@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ApiUnreachableError } from "mthds/errors";
+import { ApiTransportError, buildProblem } from "mthds/errors";
 
 const execute = vi.fn();
 
 vi.mock("@/lib/loadBundle", () => ({
-  loadHelloBundle: vi.fn().mockResolvedValue("DUMMY_BUNDLE_TOML"),
+  loadHelloBundle: vi.fn().mockResolvedValue({ "main.mthds": "DUMMY_BUNDLE_TOML" }),
 }));
 
 vi.mock("@/lib/mthdsClient", () => ({
@@ -13,12 +13,21 @@ vi.mock("@/lib/mthdsClient", () => ({
 
 import { runHelloPipeline } from "./runHelloPipeline";
 
+/** The error the SDK raises when nothing answers at the API's base URL. */
+function unreachable(): ApiTransportError {
+  const apiUrl = "http://localhost:8081";
+  return new ApiTransportError(buildProblem("client.unreachable", { base_url: apiUrl }), {
+    apiUrl,
+    networkCode: "ECONNREFUSED",
+  });
+}
+
 beforeEach(() => {
   execute.mockReset();
 });
 
 describe("runHelloPipeline", () => {
-  it("calls the SDK with the bundle, pipe code, and trimmed input on success", async () => {
+  it("calls the SDK with the method's files, pipe code, and trimmed input on success", async () => {
     execute.mockResolvedValue({
       pipeline_run_id: "run-1",
       pipe_output: {
@@ -36,7 +45,7 @@ describe("runHelloPipeline", () => {
 
     expect(execute).toHaveBeenCalledWith({
       pipe_code: "hello.extract_entities",
-      mthds_contents: ["DUMMY_BUNDLE_TOML"],
+      files: { "main.mthds": "DUMMY_BUNDLE_TOML" },
       inputs: { text: "hello world" },
     });
     expect(result).toEqual({
@@ -50,28 +59,22 @@ describe("runHelloPipeline", () => {
     expect(result).toEqual({
       ok: false,
       error: expect.objectContaining({
-        kind: "bad_request",
+        domain: "input",
         title: "Input required",
       }),
     });
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("classifies SDK errors into a structured PipelineError", async () => {
-    execute.mockRejectedValue(
-      new ApiUnreachableError(
-        "Could not reach MTHDS API at http://localhost:8081 (ECONNREFUSED)",
-        "http://localhost:8081",
-        "ECONNREFUSED",
-      ),
-    );
+  it("presents an SDK error from its problem", async () => {
+    execute.mockRejectedValue(unreachable());
 
     const result = await runHelloPipeline("some text");
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.kind).toBe("api_unreachable");
-    expect(result.error.title).toBe("MTHDS API not reachable");
+    expect(result.error.code).toBe("client.unreachable");
+    expect(result.error.title).toBe("The runtime could not be reached");
   });
 
   it("classifies unknown errors with the unknown fallback", async () => {
@@ -79,7 +82,8 @@ describe("runHelloPipeline", () => {
     const result = await runHelloPipeline("some text");
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.kind).toBe("unknown");
+    expect(result.error.title).toBe("Something went wrong");
+    expect(result.error.code).toBeUndefined();
     expect(result.error.details).toContain("API down");
   });
 });

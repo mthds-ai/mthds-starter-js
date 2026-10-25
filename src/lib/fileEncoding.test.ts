@@ -98,7 +98,7 @@ describe("fileInputErrorToPipelineError", () => {
       { kind: "file_too_large", message: "File is 20 MB; the limit is 8 MB." },
       "big.pdf",
     );
-    expect(result.kind).toBe("file_too_large");
+    expect(result.domain).toBe("input");
     expect(result.title).toBe("PDF too large");
     expect(result.details).toContain("big.pdf");
   });
@@ -108,7 +108,7 @@ describe("fileInputErrorToPipelineError", () => {
       { kind: "unsupported_file_type", message: "Expected a PDF." },
       "",
     );
-    expect(result.kind).toBe("unsupported_file_type");
+    expect(result.domain).toBe("input");
     expect(result.title).toBe("Unsupported file type");
     expect(result.details).toContain("(no filename)");
   });
