@@ -35,7 +35,7 @@ export async function runSummarizePdfPipeline(input: {
     return {
       ok: false,
       error: {
-        kind: "bad_request",
+        domain: "input",
         title: "PDF required",
         message: "Choose a PDF file (or use the sample) to summarize.",
         details: "Empty file input",
@@ -52,12 +52,12 @@ export async function runSummarizePdfPipeline(input: {
   }
 
   try {
-    const bundle = await loadSummarizePdfBundle();
+    const files = await loadSummarizePdfBundle();
     const client = getMthdsClient();
     const response = await client.execute({
       // `<domain>.<pipe_code>` names exactly one pipe; a bare code is searched across every domain.
       pipe_code: "summarize_pdf.summarize_pdf",
-      mthds_contents: [bundle],
+      files,
       inputs: { document: buildDocumentInput(dataUrl, filename || "document.pdf") },
     });
     const summary = parseDocumentSummary(response.pipe_output);
@@ -65,10 +65,7 @@ export async function runSummarizePdfPipeline(input: {
   } catch (err) {
     return {
       ok: false,
-      error: classifyPipelineError(err, {
-        apiUrl: process.env.MTHDS_API_URL,
-        hasApiKey: Boolean(process.env.MTHDS_API_KEY),
-      }),
+      error: classifyPipelineError(err),
     };
   }
 }

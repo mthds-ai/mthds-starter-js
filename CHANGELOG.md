@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.2.0] - 2026-10-25
+
+### Changed
+
+- **`mthds` 0.33 (Breaking)**: the starter moves from `mthds` `^0.14.0` to `^0.33.0`, whose client reads its base URL from `MTHDS_BASE_URL`, so `.env.example`, the README and every hint name `MTHDS_BASE_URL` in place of `MTHDS_API_URL`: rename the variable in your `.env.local`, or the SDK calls its own default API.
+- **Server Actions send the method's tree**: each action passes its method to `execute` as `files`, the map from tree path to file content (`{ "main.mthds": … }`), in place of the retired `mthds_contents` list, and `loadXxxBundle()` returns that map.
+- **Failures shown from their problem (Breaking)**: `classifyPipelineError(err)` reads the problem document every SDK error carries, its title, detail, next step, `domain`, code and request id, and no longer takes an environment argument or branches on an error's class or a server class name; `PipelineError` loses `kind` and gains `domain`, `nextStep`, `code` and `requestId`. `<ErrorDisplay>` names who must act and takes its tone from the domain, shows the code and the request id under "Technical details", and adds the app's own hint for a credential, a configuration, a method to fix and an API that cannot be reached.
+
 ## [v0.1.1] - 2026-09-24
 
 ### Changed

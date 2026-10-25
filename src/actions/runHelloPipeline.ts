@@ -22,7 +22,7 @@ export async function runHelloPipeline(text: string): Promise<RunHelloPipelineRe
     return {
       ok: false,
       error: {
-        kind: "bad_request",
+        domain: "input",
         title: "Input required",
         message: "Enter some text to extract entities from.",
         details: "Empty input",
@@ -31,12 +31,12 @@ export async function runHelloPipeline(text: string): Promise<RunHelloPipelineRe
   }
 
   try {
-    const bundle = await loadHelloBundle();
+    const files = await loadHelloBundle();
     const client = getMthdsClient();
     const response = await client.execute({
       // `<domain>.<pipe_code>` names exactly one pipe; a bare code is searched across every domain.
       pipe_code: "hello.extract_entities",
-      mthds_contents: [bundle],
+      files,
       inputs: { text: trimmed },
     });
     const entities = parseEntities(response.pipe_output);
@@ -44,10 +44,7 @@ export async function runHelloPipeline(text: string): Promise<RunHelloPipelineRe
   } catch (err) {
     return {
       ok: false,
-      error: classifyPipelineError(err, {
-        apiUrl: process.env.MTHDS_API_URL,
-        hasApiKey: Boolean(process.env.MTHDS_API_KEY),
-      }),
+      error: classifyPipelineError(err),
     };
   }
 }

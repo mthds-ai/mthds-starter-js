@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ApiUnreachableError } from "mthds/errors";
+import { ApiTransportError, buildProblem } from "mthds/errors";
 
 const execute = vi.fn();
 
 vi.mock("@/lib/loadBundle", () => ({
-  loadGenerateImageBundle: vi.fn().mockResolvedValue("DUMMY_BUNDLE_TOML"),
+  loadGenerateImageBundle: vi.fn().mockResolvedValue({ "main.mthds": "DUMMY_BUNDLE_TOML" }),
 }));
 
 vi.mock("@/lib/mthdsClient", () => ({
@@ -13,12 +13,21 @@ vi.mock("@/lib/mthdsClient", () => ({
 
 import { runGenerateImagePipeline } from "./runGenerateImagePipeline";
 
+/** The error the SDK raises when nothing answers at the API's base URL. */
+function unreachable(): ApiTransportError {
+  const apiUrl = "http://localhost:8081";
+  return new ApiTransportError(buildProblem("client.unreachable", { base_url: apiUrl }), {
+    apiUrl,
+    networkCode: "ECONNREFUSED",
+  });
+}
+
 beforeEach(() => {
   execute.mockReset();
 });
 
 describe("runGenerateImagePipeline", () => {
-  it("calls the SDK with the bundle, pipe code, and trimmed prompt on success", async () => {
+  it("calls the SDK with the method's files, pipe code, and trimmed prompt on success", async () => {
     execute.mockResolvedValue({
       pipeline_run_id: "run-1",
       pipe_output: {
@@ -39,7 +48,7 @@ describe("runGenerateImagePipeline", () => {
 
     expect(execute).toHaveBeenCalledWith({
       pipe_code: "generate_image.generate_image",
-      mthds_contents: ["DUMMY_BUNDLE_TOML"],
+      files: { "main.mthds": "DUMMY_BUNDLE_TOML" },
       inputs: { image_prompt: "a red bicycle" },
     });
     expect(result).toEqual({
@@ -57,19 +66,17 @@ describe("runGenerateImagePipeline", () => {
     const result = await runGenerateImagePipeline("   ");
     expect(result).toEqual({
       ok: false,
-      error: expect.objectContaining({ kind: "bad_request", title: "Prompt required" }),
+      error: expect.objectContaining({ domain: "input", title: "Prompt required" }),
     });
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("classifies SDK errors into a structured PipelineError", async () => {
-    execute.mockRejectedValue(
-      new ApiUnreachableError("unreachable", "http://localhost:8081", "ECONNREFUSED"),
-    );
+  it("presents an SDK error from its problem", async () => {
+    execute.mockRejectedValue(unreachable());
     const result = await runGenerateImagePipeline("a red bicycle");
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.kind).toBe("api_unreachable");
+    expect(result.error.code).toBe("client.unreachable");
   });
 
   it("classifies a missing image URL as bad_image_output", async () => {
@@ -83,6 +90,7 @@ describe("runGenerateImagePipeline", () => {
     const result = await runGenerateImagePipeline("a red bicycle");
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.kind).toBe("bad_image_output");
+    expect(result.error.title).toBe("Image generation returned no usable image");
+    expect(result.error.code).toBeUndefined();
   });
 });

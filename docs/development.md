@@ -35,7 +35,7 @@ The three happy-path specs (`extract`, `summarize-pdf`, `generate-image`) call t
 - **They skip without a key.** When `MTHDS_API_KEY` is not set, those specs are reported as skipped instead of failing with an authentication error, so a fresh clone can run `make test-e2e` before it has credentials.
 - **`make test-e2e` asks for confirmation** before it spends anything. The prompt is skipped in CI and in non-interactive shells; `CONFIRM=1 make test-e2e` bypasses it in a script.
 
-The fourth spec, `error-display`, checks the error shown when the MTHDS API cannot be reached. It needs no key, costs nothing, and skips itself when the configured API answers its `/health` check.
+The fourth spec, `error-display`, checks the error shown when the MTHDS API cannot be reached: the SDK's `client.unreachable` problem, with its next step, the hint to start the API and its code under "Technical details". It needs no key, costs nothing, and skips itself when the configured API answers its `/health` check.
 
 The first run needs the browser binary: `npx playwright install chromium`.
 
